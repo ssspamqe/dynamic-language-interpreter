@@ -1,0 +1,10 @@
+// 15. Function
+var sum := func(a,b) is
+    var r := a + b
+    return r
+end
+print sum(2,3)
+
+---
+
+5

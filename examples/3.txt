@@ -1,0 +1,11 @@
+// 3. Count even numbers in array
+var arr := [1,2,3,4,5,6]
+var count := 0
+for x in arr loop
+    if (x % 2) = 0 => count := count + 1
+end
+print count
+
+---
+
+3

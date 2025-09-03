@@ -1,0 +1,7 @@
+// 14. Function with => expression
+var inc := func(x) => x + 1;
+print inc(5)
+
+---
+
+6

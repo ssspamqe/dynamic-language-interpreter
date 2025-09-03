@@ -1,0 +1,10 @@
+// 9. Loop for in range
+for k in 1..3 loop
+    print k
+end
+
+---
+
+1
+2
+3

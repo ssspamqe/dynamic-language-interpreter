@@ -1,0 +1,7 @@
+// 12. Tuple by name
+var t := {a:=1, b:="ok", c:=3.14}
+print t.a, t.b
+
+---
+
+1 ok

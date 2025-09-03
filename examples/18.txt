@@ -1,0 +1,7 @@
+// 18. Error: get non-existent element in array
+var arr := [1,2,3]
+print arr[10]
+
+---
+
+Error

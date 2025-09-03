@@ -1,0 +1,7 @@
+// 19. Error: call non-existent argument in tuple
+var t := {a:=1, b:=2}
+print t.c
+
+---
+
+Error

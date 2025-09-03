@@ -1,0 +1,11 @@
+// 11. Loop with exit
+var c := 0
+loop
+    c := c + 1
+    if c = 3 => exit
+end
+print "done", c
+
+---
+
+done 3

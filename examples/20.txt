@@ -1,0 +1,7 @@
+// 20. Error: call non-function
+var z := 123
+print z(5)
+
+---
+
+Error
