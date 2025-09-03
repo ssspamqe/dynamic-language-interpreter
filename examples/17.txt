@@ -1,0 +1,7 @@
+// 17. Error: division none
+var a := none
+print a / 2
+
+---
+
+Error

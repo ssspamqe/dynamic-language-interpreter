@@ -1,0 +1,11 @@
+// 10. Loop for in array
+var arr := [2,4,6]
+var sum := 0
+for x in arr loop
+    sum := sum + x
+end
+print sum
+
+---
+
+12

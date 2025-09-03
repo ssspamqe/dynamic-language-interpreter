@@ -1,0 +1,9 @@
+// 21. Conversion types
+var myInteger := 2
+var myReal := 1.0;
+var sum := myInteger + myReal;
+print sum
+
+---
+
+3.0

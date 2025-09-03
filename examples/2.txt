@@ -1,0 +1,11 @@
+// 2. Search maximum of array
+var arr := [4, 1, 9, 2]
+var max := arr[1]
+for x in arr loop
+    if x > max => max := x
+end
+print max
+
+---
+
+9

@@ -1,0 +1,8 @@
+// 22. Dynamic typing
+var a := 10
+a = "random string"
+print a
+
+---
+
+random string

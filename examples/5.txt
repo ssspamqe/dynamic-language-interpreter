@@ -1,0 +1,11 @@
+// 5. Concat strings in loop
+var words := ["Dynamic", "Language", "D"]
+var sentence := ""
+for w in words loop
+    sentence := sentence + w + " "
+end
+print sentence
+
+---
+
+Dynamic Language D

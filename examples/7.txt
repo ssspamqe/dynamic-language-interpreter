@@ -1,0 +1,7 @@
+// 7. short if
+var y := 10
+if y = 10 => print "equal 10"
+
+---
+
+equal 10

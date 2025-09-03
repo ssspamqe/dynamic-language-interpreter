@@ -1,0 +1,8 @@
+// 16. Error: sum integer and string
+var x := "abc"
+var y := 10
+print x + y
+
+---
+
+Error

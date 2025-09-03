@@ -1,0 +1,7 @@
+// 13. Tuple by index
+var t := {10, 20, 30}
+print t.1, t.3
+
+---
+
+10 30
