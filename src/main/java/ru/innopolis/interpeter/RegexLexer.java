@@ -1,14 +1,12 @@
 package ru.innopolis.interpeter;
 
 import ru.innopolis.interpeter.lexer.Code;
+import ru.innopolis.interpeter.lexer.tokens.Span;
 import ru.innopolis.interpeter.lexer.tokens.Token;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 public class RegexLexer {
     private static class Rule {
@@ -24,39 +22,43 @@ public class RegexLexer {
     private final List<Rule> rules = new ArrayList<>();
 
     public RegexLexer() {
-        // ключевые слова и операторы из Code
-        for (Code code : Code.values()) {
-            if (code.getStringRepresentation() != null) {
-                String regex = Pattern.quote(code.getStringRepresentation());
-                rules.add(new Rule(code, regex));
-            }
-        }
-
-        // Идентификаторы (отдельно, чтобы не перетирали ключевые слова)
-        rules.add(new Rule(Code.IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*"));
-        rules.add(new Rule(Code.NEWLINE, "\\r?\\n"));
+        // комментарии
         rules.add(new Rule(null, "//.*(?:\\r?\\n|$)"));
+        // перенос строки
+        rules.add(new Rule(Code.NEWLINE, "\\r?\\n"));
+        // строковые литералы
         rules.add(new Rule(Code.STRING_LITERAL, "\"([^\"\\\\]|\\\\.)*\""));
 
+        for (Code code : Code.values()) {
+            rules.add(new Rule(code, Pattern.quote(code.getStringRepresentation())));
+        }
+        // числа
+        rules.add(new Rule(Code.REAL_LITERAL, "\\d+\\.\\d+"));
+        rules.add(new Rule(Code.INT_LITERAL, "\\d+"));
+        // идентификаторы
+        rules.add(new Rule(Code.IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*"));
     }
 
     public List<Token> tokenize(String input) {
         List<Token> tokens = new ArrayList<>();
         int pos = 0;
+        long line = 1;
+        int col = 0;
 
         while (pos < input.length()) {
             String substring = input.substring(pos);
 
-            // пробелы пропускаем (но не переносы строк)
+            // пробелы (не переносы строк)
             if (substring.matches("^ +.*")) {
-                pos += substring.length() - substring.replaceFirst("^ +", "").length();
+                int spaces = substring.length() - substring.replaceFirst("^ +", "").length();
+                pos += spaces;
+                col += spaces;
                 continue;
             }
 
             Rule bestRule = null;
             String bestMatch = null;
 
-            // ищем самое длинное совпадение
             for (Rule rule : rules) {
                 Matcher matcher = rule.pattern.matcher(substring);
                 if (matcher.find()) {
@@ -71,7 +73,21 @@ public class RegexLexer {
             if (bestMatch != null) {
                 Code type = bestRule.type;
 
-                // если идентификатор совпал с ключевым словом → переопределяем
+                // комментарий → пропускаем
+                if (type == null) {
+                    for (char c : bestMatch.toCharArray()) {
+                        if (c == '\n') {
+                            line++;
+                            col = 0;
+                        } else {
+                            col++;
+                        }
+                    }
+                    pos += bestMatch.length();
+                    continue;
+                }
+
+                // идентификатор → проверка ключевых слов
                 if (type == Code.IDENTIFIER) {
                     type = Arrays.stream(Code.values())
                             .filter(c -> c.getStringRepresentation() != null
@@ -80,14 +96,26 @@ public class RegexLexer {
                             .orElse(Code.IDENTIFIER);
                 }
 
-                tokens.add(new Token(type, bestMatch));
+                Span span = new Span(line, col, col + bestMatch.length());
+                tokens.add(new Token(span, type, bestMatch));
+
+                // обновляем позиции
+                for (char c : bestMatch.toCharArray()) {
+                    if (c == '\n') {
+                        line++;
+                        col = 0;
+                    } else {
+                        col++;
+                    }
+                }
+
                 pos += bestMatch.length();
             } else {
-                throw new RuntimeException("Unexpected character: " + substring.charAt(0));
+                throw new RuntimeException("Unexpected character: " + substring.charAt(0) +
+                        " at line " + line + ", column " + col);
             }
         }
 
         return tokens;
     }
-
 }
