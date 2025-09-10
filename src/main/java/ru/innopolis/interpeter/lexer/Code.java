@@ -54,12 +54,14 @@ public enum Code {
     IS("is"),
     NOT("not"),
 
-    ROUND_BRACKET_OPEN("("),
-    ROUND_BRACKET_CLOSE(")"),
-    CURLY_BRACKET_OPEN("{"),
-    CURLY_BRACKET_CLOSE("}"),
-    SQUARE_BRACKET_OPEN("["),
-    SQUARE_BRACKET_CLOSE("]");
+    ROUND_BRACKET_LEFT("("),
+    ROUND_BRACKET_RIGHT(")"),
+    CURLY_BRACKET_LEFT("{"),
+    CURLY_BRACKET_RIGHT("}"),
+    SQUARE_BRACKET_LEFT("["),
+    SQUARE_BRACKET_RIGHT("]"),
+
+    IDENTIFIER(null);
 
     private final String stringRepresentation;
 }
