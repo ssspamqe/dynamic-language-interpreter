@@ -1,12 +1,15 @@
 package ru.innopolis.interpeter.lexer.tokens;
 
-import lombok.EqualsAndHashCode;
-import lombok.Value;
+import lombok.Getter;
+import ru.innopolis.interpeter.lexer.Code;
 
-@Value
-@EqualsAndHashCode(callSuper = true)
-public class StringToken {
+@Getter
+public class StringToken extends Token {
 
-    String value;
+    private String value;
 
+    public StringToken(Span span, String value) {
+        super(span, Code.STRING_LITERAL);
+        this.value = value;
+    }
 }

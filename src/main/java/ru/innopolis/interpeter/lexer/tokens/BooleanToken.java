@@ -1,12 +1,16 @@
 package ru.innopolis.interpeter.lexer.tokens;
 
-import lombok.EqualsAndHashCode;
-import lombok.Value;
+import lombok.Getter;
+import ru.innopolis.interpeter.lexer.Code;
 
-@Value
-@EqualsAndHashCode(callSuper = true)
-public class BooleanToken {
+@Getter
+public class BooleanToken extends Token {
 
-    boolean value;
+   private boolean value;
+
+    public BooleanToken(Span span, boolean value) {
+        super(span, value ? Code.TRUE : Code.FALSE);
+        this.value = value;
+    }
 
 }

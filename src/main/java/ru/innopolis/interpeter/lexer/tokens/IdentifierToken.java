@@ -1,10 +1,17 @@
 package ru.innopolis.interpeter.lexer.tokens;
 
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.Value;
+import ru.innopolis.interpeter.lexer.Code;
 
-@Value
-@EqualsAndHashCode(callSuper = true)
+@Getter
 public class IdentifierToken extends Token {
-    String value;
+
+    private String value;
+
+    public IdentifierToken(Span span, String value){
+        super(span, Code.IDENTIFIER);
+        this.value = value;
+    }
 }

@@ -4,11 +4,11 @@ import lombok.Getter;
 import ru.innopolis.interpeter.lexer.Code;
 
 @Getter
-public class RealToken extends Token {
-    private double value;
+public class IntegerToken extends Token {
+    long value;
 
-    public RealToken(Span span, double value) {
-        super(span, Code.REAL_LITERAL);
+    public IntegerToken(Span span, long value) {
+        super(span, Code.INT_LITERAL);
         this.value = value;
     }
 }

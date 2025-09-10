@@ -31,6 +31,8 @@ public enum Code {
     RETURN("return"),
     PRINT("print"),
 
+    TRUE("true"),
+    FALSE("false"),
     OR("or"),
     AND("and"),
     XOR("xor"),
@@ -61,7 +63,12 @@ public enum Code {
     SQUARE_BRACKET_LEFT("["),
     SQUARE_BRACKET_RIGHT("]"),
 
-    IDENTIFIER(null);
+    NEWLINE(null),
+    IDENTIFIER(null),
+
+    INT_LITERAL(null),
+    REAL_LITERAL(null),
+    STRING_LITERAL(null);
 
     private final String stringRepresentation;
 }
