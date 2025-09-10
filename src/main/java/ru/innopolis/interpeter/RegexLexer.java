@@ -59,6 +59,9 @@ public class RegexLexer {
                 count = m.group(1).length(); // number of spaces
             }
             substring = substring.replaceFirst("^\\s+", "");
+            if(substring.isEmpty()){
+                break;
+            }
             pos+=count;
             col+=count;
 
