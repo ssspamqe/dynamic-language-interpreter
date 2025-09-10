@@ -53,12 +53,12 @@ public class RegexLexer {
             String substring = input.substring(pos);
 
             // пробелы (не переносы строк)
-            Matcher m = Pattern.compile("^(\\s+)").matcher(substring);
+            Matcher m = Pattern.compile("^[ \\t]+").matcher(substring);
             int count = 0;
             if (m.find()) {
-                count = m.group(1).length(); // number of spaces
+                count = m.group().length();
             }
-            substring = substring.replaceFirst("^\\s+", "");
+            substring = substring.replaceFirst("^[ \\t]+", "");
             if(substring.isEmpty()){
                 break;
             }

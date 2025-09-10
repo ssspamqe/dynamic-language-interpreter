@@ -16,13 +16,15 @@ public class Main {
             if x = 42 then
                 x := x + 1
             end
+            
             """;
 
         List<Token> tokens = lexer.tokenize(code);
 
         for (Token token : tokens) {
-            System.out.printf("%s at line %d, col %d-%d%n",
+            System.out.printf("%s (%s) at line %d, col %d-%d%n",
                     token.getCode(),
+                    token,
                     token.getSpan().line(),
                     token.getSpan().begin(),
                     token.getSpan().end());
