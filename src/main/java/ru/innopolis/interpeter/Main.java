@@ -11,11 +11,12 @@ public class Main {
         RegexLexer lexer = new RegexLexer();
 
         String code = """
-            var x := 42
-            print("Hello, world!")
-            if x = 42 then
-                x := x + 1
+            var n := 5
+            var res := 1;
+            for i in 1..n loop
+                res := res * i
             end
+            print res
             """;
 
         List<Token> tokens = lexer.tokenize(code);
