@@ -3,6 +3,7 @@ package ru.innopolis.interpeter;
 import ru.innopolis.interpeter.lexer.Code;
 import ru.innopolis.interpeter.lexer.tokens.Span;
 import ru.innopolis.interpeter.lexer.tokens.Token;
+import ru.innopolis.interpeter.lexer.tokens.TokenFactory;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -89,15 +90,20 @@ public class RegexLexer {
 
                 // идентификатор → проверка ключевых слов
                 if (type == Code.IDENTIFIER) {
+                    String finalBestMatch = bestMatch;
                     type = Arrays.stream(Code.values())
                             .filter(c -> c.getStringRepresentation() != null
-                                    && c.getStringRepresentation().equals(bestMatch))
+                                    && c.getStringRepresentation().equals(finalBestMatch))
                             .findFirst()
                             .orElse(Code.IDENTIFIER);
                 }
 
                 Span span = new Span(line, col, col + bestMatch.length());
-                tokens.add(new Token(span, type, bestMatch));
+
+                tokens.add(
+                        TokenFactory.getTokenByCode(type, bestMatch, span)
+                );
+
 
                 // обновляем позиции
                 for (char c : bestMatch.toCharArray()) {
