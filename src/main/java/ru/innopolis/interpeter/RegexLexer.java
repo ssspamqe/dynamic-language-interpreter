@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class RegexLexer {
+
     private static class Rule {
         final Code type;
         final Pattern pattern;
@@ -52,12 +53,14 @@ public class RegexLexer {
             String substring = input.substring(pos);
 
             // пробелы (не переносы строк)
-            if (substring.matches("^\\s*-*")) {
-                int spaces = substring.length() - substring.replaceFirst("^ +", "").length();
-                pos += spaces;
-                col += spaces;
-                continue;
+            Matcher m = Pattern.compile("^(\\s+)").matcher(substring);
+            int count = 0;
+            if (m.find()) {
+                count = m.group(1).length(); // number of spaces
             }
+            substring = substring.replaceFirst("^\\s+", "");
+            pos+=count;
+            col+=count;
 
             Rule bestRule = null;
             String bestMatch = null;
