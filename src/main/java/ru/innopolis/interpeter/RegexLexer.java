@@ -31,7 +31,9 @@ public class RegexLexer {
         rules.add(new Rule(Code.STRING_LITERAL, "\"([^\"\\\\]|\\\\.)*\""));
 
         for (Code code : Code.values()) {
-            rules.add(new Rule(code, Pattern.quote(code.getStringRepresentation())));
+            if (code.getStringRepresentation() != null) {
+                rules.add(new Rule(code, Pattern.quote(code.getStringRepresentation())));
+            }
         }
         // числа
         rules.add(new Rule(Code.REAL_LITERAL, "\\d+\\.\\d+"));
@@ -50,7 +52,7 @@ public class RegexLexer {
             String substring = input.substring(pos);
 
             // пробелы (не переносы строк)
-            if (substring.matches("^ +.*")) {
+            if (substring.matches("^\\s*-*")) {
                 int spaces = substring.length() - substring.replaceFirst("^ +", "").length();
                 pos += spaces;
                 col += spaces;
