@@ -1,4 +1,4 @@
-package ru.innopolis.interpeter.lexer;
+package ru.innopolis.interpeter.lexer.tokens;
 
 
 record Span(

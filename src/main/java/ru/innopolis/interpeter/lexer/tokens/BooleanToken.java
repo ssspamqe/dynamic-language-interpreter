@@ -1,10 +1,12 @@
-package ru.innopolis.interpeter.lexer;
+package ru.innopolis.interpeter.lexer.tokens;
 
 import lombok.EqualsAndHashCode;
 import lombok.Value;
 
 @Value
 @EqualsAndHashCode(callSuper = true)
-public class Integer extends Token{
-    long value;
+public class BooleanToken {
+
+    boolean value;
+
 }
