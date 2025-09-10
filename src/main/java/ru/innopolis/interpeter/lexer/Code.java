@@ -20,6 +20,7 @@ public enum Code {
     IN("in"),
     LOOP("loop"),
     EXIT("exit"),
+    RANGE(".."),
 
     INT("int"),
     REAL("real"),
