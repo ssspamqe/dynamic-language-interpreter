@@ -1,0 +1,50 @@
+// Search maximum of array
+var arr := [4, 1, 9, 2]
+var max := arr[1]
+for x in arr loop
+    if x > max => max := x
+end
+print max
+---
+DECLARATION(var)
+IDENTIFIER(arr)
+ASSIGNMENT(:=)
+SQUARE_BRACKET_LEFT([)
+INT_LITERAL(4)
+COMMA(,)
+INT_LITERAL(1)
+COMMA(,)
+INT_LITERAL(9)
+COMMA(,)
+INT_LITERAL(2)
+SQUARE_BRACKET_RIGHT(])
+NEWLINE(\n)
+DECLARATION(var)
+IDENTIFIER(max)
+ASSIGNMENT(:=)
+IDENTIFIER(arr)
+SQUARE_BRACKET_LEFT([)
+INT_LITERAL(1)
+SQUARE_BRACKET_RIGHT(])
+NEWLINE(\n)
+FOR(for)
+IDENTIFIER(x)
+IN(in)
+IDENTIFIER(arr)
+LOOP(loop)
+NEWLINE(\n)
+IF(if)
+IDENTIFIER(x)
+MORE(>)
+IDENTIFIER(max)
+LAMBDA(=>)
+IDENTIFIER(max)
+ASSIGNMENT(:=)
+IDENTIFIER(x)
+NEWLINE(\n)
+END(end)
+NEWLINE(\n)
+PRINT(print)
+IDENTIFIER(max)
+---
+9

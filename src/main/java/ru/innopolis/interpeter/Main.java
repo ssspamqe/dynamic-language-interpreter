@@ -22,7 +22,7 @@ public class Main {
         List<Token> tokens = lexer.tokenize(code);
 
         for (Token token : tokens) {
-            System.out.printf(token.toString());
+            System.out.printf(token.toString() + '\n');
         }
     }
 }
