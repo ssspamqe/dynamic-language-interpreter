@@ -39,5 +39,3 @@ END(end)
 NEWLINE(\n)
 PRINT(print)
 IDENTIFIER(sum)
----
-15

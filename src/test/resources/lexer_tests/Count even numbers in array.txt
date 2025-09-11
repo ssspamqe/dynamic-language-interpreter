@@ -57,5 +57,3 @@ END(end)
 NEWLINE(\n)
 PRINT(print)
 IDENTIFIER(count)
----
-3
