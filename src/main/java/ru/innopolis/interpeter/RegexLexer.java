@@ -24,11 +24,11 @@ public class RegexLexer {
     private final List<Rule> rules = new ArrayList<>();
 
     public RegexLexer() {
-        // комментарии
+        // Comments
         rules.add(new Rule(null, "//.*(?:\\r?\\n|$)"));
-        // перенос строки
+        // New line
         rules.add(new Rule(Code.NEWLINE, "\\r?\\n"));
-        // строковые литералы
+        // Strings
         rules.add(new Rule(Code.STRING_LITERAL, "\"([^\"\\\\]|\\\\.)*\""));
 
         for (Code code : Code.values()) {
@@ -36,10 +36,10 @@ public class RegexLexer {
                 rules.add(new Rule(code, Pattern.quote(code.getStringRepresentation())));
             }
         }
-        // числа
+        // Numbers
         rules.add(new Rule(Code.REAL_LITERAL, "\\d+\\.\\d+"));
         rules.add(new Rule(Code.INT_LITERAL, "\\d+"));
-        // идентификаторы
+        // Ids
         rules.add(new Rule(Code.IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*"));
     }
 
@@ -52,7 +52,7 @@ public class RegexLexer {
         while (pos < input.length()) {
             String substring = input.substring(pos);
 
-            // пробелы (не переносы строк)
+            // Spaces and tabs
             Matcher m = Pattern.compile("^[ \\t]+").matcher(substring);
             int count = 0;
             if (m.find()) {
@@ -82,7 +82,7 @@ public class RegexLexer {
             if (bestMatch != null) {
                 Code type = bestRule.type;
 
-                // комментарий → пропускаем
+                // Skip all null types except newline
                 if (type == null) {
                     for (char c : bestMatch.toCharArray()) {
                         if (c == '\n') {
@@ -96,7 +96,7 @@ public class RegexLexer {
                     continue;
                 }
 
-                // идентификатор → проверка ключевых слов
+                // Check if Id is not keyword
                 if (type == Code.IDENTIFIER) {
                     String finalBestMatch = bestMatch;
                     type = Arrays.stream(Code.values())
@@ -113,7 +113,7 @@ public class RegexLexer {
                 );
 
 
-                // обновляем позиции
+                // Update position
                 for (char c : bestMatch.toCharArray()) {
                     if (c == '\n') {
                         line++;
