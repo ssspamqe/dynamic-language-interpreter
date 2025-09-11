@@ -10,7 +10,8 @@ public class TokenFactory {
             case REAL_LITERAL -> new RealToken(span, Double.parseDouble(rawToken));
             case STRING_LITERAL -> new StringToken(span, rawToken);
             case IDENTIFIER -> new IdentifierToken(span, rawToken);
-            default -> new Token(span, code);
+            case NEWLINE -> new Token(span, code, "\\n");
+            default -> new Token(span, code, rawToken);
         };
     }
 }
