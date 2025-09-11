@@ -19,7 +19,7 @@ class RegexLexerTest {
 
     @Test
     void runAllExampleTests() throws IOException {
-        Path examplesDir = Path.of("src/test/resources/examples");
+        Path examplesDir = Path.of("src/test/resources/lexer_tests");
         assertTrue(Files.exists(examplesDir), "There is no folder with code examples: " + examplesDir);
 
         try (Stream<Path> paths = Files.list(examplesDir)) {
@@ -46,11 +46,10 @@ class RegexLexerTest {
     private void runTestFile(Path file) throws IOException {
         String content = Files.readString(file);
         String[] parts = content.split("(?m)^---$");
-        assertEquals(3, parts.length, "File must contain 3 sections: " + file);
+        assertEquals(2, parts.length, "File must contain 2 sections: " + file);
 
         String code = parts[0].trim();
         String expectedTokens = parts[1].trim();
-        String expectedOutput = parts[2].trim();
 
         // tokenization
         List<Token> tokens = lexer.tokenize(code);
