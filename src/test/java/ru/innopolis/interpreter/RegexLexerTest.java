@@ -20,7 +20,7 @@ class RegexLexerTest {
     @Test
     void runAllExampleTests() throws IOException {
         Path examplesDir = Path.of("src/test/resources/examples");
-        assertTrue(Files.exists(examplesDir), "There is not folder with code examples: " + examplesDir);
+        assertTrue(Files.exists(examplesDir), "There is no folder with code examples: " + examplesDir);
 
         try (Stream<Path> paths = Files.list(examplesDir)) {
             List<Path> files = paths
@@ -28,18 +28,25 @@ class RegexLexerTest {
                     .sorted()
                     .collect(Collectors.toList());
 
-            assertFalse(files.isEmpty(), "There is not test in " + examplesDir);
+            assertFalse(files.isEmpty(), "There are no test files in " + examplesDir);
 
+            System.out.println("Found " + files.size() + " test files in " + examplesDir);
+
+            int passed = 0;
             for (Path file : files) {
                 runTestFile(file);
+                passed++;
+                System.out.println("✔ Passed: " + file.getFileName());
             }
+
+            System.out.println("✅ All " + passed + " tests passed successfully.");
         }
     }
 
     private void runTestFile(Path file) throws IOException {
         String content = Files.readString(file);
         String[] parts = content.split("(?m)^---$");
-        assertEquals(3, parts.length, "File have to contain 3 sections: " + file);
+        assertEquals(3, parts.length, "File must contain 3 sections: " + file);
 
         String code = parts[0].trim();
         String expectedTokens = parts[1].trim();
@@ -48,7 +55,7 @@ class RegexLexerTest {
         // tokenization
         List<Token> tokens = lexer.tokenize(code);
 
-        // Collect token as strings
+        // Collect tokens as strings
         String actualTokens = tokens.stream()
                 .map(Token::toString)
                 .collect(Collectors.joining("\n"));
