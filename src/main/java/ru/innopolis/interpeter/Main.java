@@ -11,18 +11,13 @@ public class Main {
         RegexLexer lexer = new RegexLexer();
 
         String code = """
-            var i := 1
-            var sum := 0
-            while i <= 5 loop
-                sum := sum + i
-                i := i + 1
-            end
-            print sum""";
+            var t := {a:=1, b:=2}
+            print t.c""";
 
         List<Token> tokens = lexer.tokenize(code);
 
         for (Token token : tokens) {
-            System.out.printf(token.toString() + '\n');
+            System.out.printf(token.toString() + ' ' + token.getSpan() + '\n');
         }
     }
 }
