@@ -1,4 +1,4 @@
-package ru.innopolis.interpeter.lexer;
+package ru.innopolis.interpreter.lexer;
 
 public enum Code {
     IF("if"),
