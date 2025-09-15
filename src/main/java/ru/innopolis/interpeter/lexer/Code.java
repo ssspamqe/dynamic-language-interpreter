@@ -1,10 +1,5 @@
 package ru.innopolis.interpeter.lexer;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-
-@AllArgsConstructor
-@Getter
 public enum Code {
     IF("if"),
     THEN("then"),
@@ -72,4 +67,13 @@ public enum Code {
     STRING_LITERAL(null);
 
     private final String stringRepresentation;
+
+    // todo: conflict lombok&scala
+    Code(String stringRepresentation) {
+        this.stringRepresentation = stringRepresentation;
+    }
+
+    public String getStringRepresentation() {
+        return stringRepresentation;
+    }
 }

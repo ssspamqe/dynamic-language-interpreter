@@ -1,16 +1,29 @@
 package ru.innopolis.interpeter.lexer.tokens;
 
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
 import ru.innopolis.interpeter.lexer.Code;
 
-@Getter
-@AllArgsConstructor
 public class Token {
-    Span span;
-    Code code;
-    String rawValue;
+    private final Span span;
+    private final Code code;
+    private final String rawValue;
+
+    public Token(Span span, Code code, String rawValue) {
+        this.span = span;
+        this.code = code;
+        this.rawValue = rawValue;
+    }
+
+    public Span getSpan() {
+        return span;
+    }
+
+    public Code getCode() {
+        return code;
+    }
+
+    public String getRawValue() {
+        return rawValue;
+    }
 
     @Override
     public String toString() {

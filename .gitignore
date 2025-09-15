@@ -1,3 +1,13 @@
+# sbt
+target/
+project/target/
+project/project/
+.bsp/
+
+# Scala / Java
+*.class
+*.log
+
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
