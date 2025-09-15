@@ -1,0 +1,8 @@
+// Declaration integer
+var x := 1;
+---
+DECLARATION(var)
+IDENTIFIER(x)
+ASSIGNMENT(:=)
+INT_LITERAL(1)
+SEMICOLON(;)

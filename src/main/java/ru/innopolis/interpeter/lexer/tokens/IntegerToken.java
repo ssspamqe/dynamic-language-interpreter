@@ -8,7 +8,7 @@ public class IntegerToken extends Token {
     long value;
 
     public IntegerToken(Span span, long value) {
-        super(span, Code.INT_LITERAL);
+        super(span, Code.INT_LITERAL, Long.toString(value));
         this.value = value;
     }
 }

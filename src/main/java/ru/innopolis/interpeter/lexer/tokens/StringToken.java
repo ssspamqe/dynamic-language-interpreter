@@ -9,7 +9,7 @@ public class StringToken extends Token {
     private String value;
 
     public StringToken(Span span, String value) {
-        super(span, Code.STRING_LITERAL);
+        super(span, Code.STRING_LITERAL, value);
         this.value = value;
     }
 }

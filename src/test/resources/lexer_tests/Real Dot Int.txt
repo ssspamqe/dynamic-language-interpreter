@@ -1,0 +1,14 @@
+var i := 1.2.3
+---
+DECLARATION(var)
+SPACE( )
+IDENTIFIER(i)
+SPACE( )
+ASSIGNMENT(:=)
+SPACE( )
+REAL(1.2)
+---
+var i := 1.2.3
+            ^
+Error on line 1 column 9:
+No such token

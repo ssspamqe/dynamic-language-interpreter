@@ -10,4 +10,10 @@ import ru.innopolis.interpeter.lexer.Code;
 public class Token {
     Span span;
     Code code;
+    String rawValue;
+
+    @Override
+    public String toString() {
+        return String.format("%s(%s)", code, rawValue);
+    }
 }
