@@ -18,8 +18,8 @@ class RegexLexer {
       .map(c => Rule(c, Regex.quote(c.getStringRepresentation).r))
 
     val commentRule = Rule(null, "//.*(?:\\r?\\n|$)".r)
-    val newlineRule = Rule(Code.NEWLINE, "\\r?\\n".r)
-    val spaceRule = Rule(Code.SPACE, "^[ ]+".r) // trim sequence of spaces to 1 token
+    val newlineRule = Rule(Code.NEWLINE, "\\r?\\n".r) // todo collapse sequence
+    val spaceRule = Rule(Code.SPACE, "^[ ]+".r) // collapse sequence of spaces to 1 token
     val stringRule = Rule(Code.STRING_LITERAL, "\"([^\"\\\\]|\\\\.)*\"".r)
     val identifiers = List(Rule(Code.IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*".r))
 
