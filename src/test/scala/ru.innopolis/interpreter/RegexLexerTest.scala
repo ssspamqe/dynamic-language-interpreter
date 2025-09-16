@@ -9,28 +9,24 @@ class RegexLexerTest extends AnyFunSuite {
 
   private val lexer = new RegexLexer()
 
-  test("run all example tests") {
-    val examplesDir = Path.of("src/test/resources/lexer_tests")
-    assert(Files.exists(examplesDir), s"There is no folder with code examples: $examplesDir")
+  val examplesDir = Path.of("src/test/resources/lexer_tests")
+  assert(Files.exists(examplesDir), s"There is no folder with code examples: $examplesDir")
 
-    val files = Files.list(examplesDir).iterator().asScala
-      .filter(_.toString.endsWith(".txt"))
-      .toList
-      .sortBy(_.getFileName.toString)
+  val files = Files.list(examplesDir).iterator().asScala
+    .filter(_.toString.endsWith(".txt"))
+    .toList
+    .sortBy(_.getFileName.toString)
 
-    assert(files.nonEmpty, s"There are no test files in $examplesDir")
+  assert(files.nonEmpty, s"There are no test files in $examplesDir")
 
-    println(s"Found ${files.size} test files in $examplesDir")
+  println(s"Found ${files.size} test files in $examplesDir")
 
-    var passed = 0
-    files.foreach { file =>
+  files.foreach { file =>
+    test(file.getFileName.toString) {
       runTestFile(file)
-      passed += 1
-      println(s"✔ Passed: ${file.getFileName}")
     }
-
-    println(s"✅ All $passed tests passed successfully.")
   }
+
 
   private def runTestFile(file: Path): Unit = {
     val content = Files.readString(file)

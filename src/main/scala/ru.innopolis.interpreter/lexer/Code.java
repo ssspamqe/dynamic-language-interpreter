@@ -59,9 +59,11 @@ public enum Code {
     SQUARE_BRACKET_LEFT("["),
     SQUARE_BRACKET_RIGHT("]"),
 
-    NEWLINE(null),
-    IDENTIFIER(null),
+    NEWLINE("\\n"),
+    SPACE(" "),
+    TAB("\\t"),
 
+    IDENTIFIER(null),
     INT_LITERAL(null),
     REAL_LITERAL(null),
     STRING_LITERAL(null);

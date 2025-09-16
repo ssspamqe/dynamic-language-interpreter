@@ -14,6 +14,7 @@ object Token {
       case Code.STRING_LITERAL => base(rawToken)
       case Code.IDENTIFIER     => base(rawToken)
       case Code.NEWLINE        => base("\\n")
+      case Code.SPACE          => base(" ")
       case _                   => base(rawToken)
     }
   }
