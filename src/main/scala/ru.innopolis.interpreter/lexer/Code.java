@@ -1,4 +1,4 @@
-package ru.innopolis.interpeter.lexer;
+package ru.innopolis.interpreter.lexer;
 
 public enum Code {
     IF("if"),
@@ -59,9 +59,11 @@ public enum Code {
     SQUARE_BRACKET_LEFT("["),
     SQUARE_BRACKET_RIGHT("]"),
 
-    NEWLINE(null),
-    IDENTIFIER(null),
+    NEWLINE("\\n"),
+    SPACE(" "),
+    TAB("\\t"),
 
+    IDENTIFIER(null),
     INT_LITERAL(null),
     REAL_LITERAL(null),
     STRING_LITERAL(null);

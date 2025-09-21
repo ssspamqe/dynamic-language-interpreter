@@ -1,4 +1,4 @@
-package ru.innopolis.interpeter
+package ru.innopolis.interpreter
 
 import scala.jdk.CollectionConverters._
 
@@ -12,7 +12,7 @@ object Main {
         |print t.c
       """.stripMargin
 
-    val tokens = lexer.tokenize(code).asScala
+    val tokens = lexer.tokenize(code)
 
     for (token <- tokens) {
       println(s"$token")
