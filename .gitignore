@@ -1,3 +1,13 @@
+# sbt
+target/
+project/target/
+project/project/
+.bsp/
+
+# Scala / Java
+*.class
+*.log
+
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
@@ -15,6 +25,7 @@ build/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+.idea
 
 ### Eclipse ###
 .apt_generated

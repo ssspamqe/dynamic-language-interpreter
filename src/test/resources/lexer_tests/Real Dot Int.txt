@@ -1,0 +1,7 @@
+var i := 1.2.3
+---
+var i := 1.2.3
+            ^
+Error on line 1 column 9:
+No such token
+todo handle error sequence
