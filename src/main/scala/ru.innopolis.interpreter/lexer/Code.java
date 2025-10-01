@@ -8,7 +8,7 @@ public enum Code {
 
     LAMBDA("=>"),
     ASSIGNMENT(":="),
-    DECLARATION("var"),
+    VAR("var"),
 
     WHILE("while"),
     FOR("for"),
