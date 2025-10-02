@@ -9,7 +9,7 @@ object Main {
     val lexer = new RegexLexer()
 
     val code =
-      """var a:=a or (b or c)""".stripMargin
+      """var a:=""".stripMargin
 
     val tokens = lexer.tokenize(code)
 

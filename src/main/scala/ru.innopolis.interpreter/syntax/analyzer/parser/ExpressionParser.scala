@@ -2,8 +2,9 @@ package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
 import ru.innopolis.interpreter.lexer.{Code, Token}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FieldAccess, FunctionCall, IndexAccess}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Binary, Expression, Ident, Literal, Unary}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.{ArrayLiteral, Literal, TupleEntry, TupleLiteral}
 
 import scala.collection.BufferedIterator
 
@@ -94,25 +95,53 @@ class ExpressionParser {
 
     val tok = it.next()
     var expr: Expression = tok.code match {
-      case Code.INT_LITERAL    => Literal(tok.value)
-      case Code.REAL_LITERAL   => Literal(tok.value)
+      case Code.INT_LITERAL => Literal(tok.value)
+      case Code.REAL_LITERAL => Literal(tok.value)
       case Code.STRING_LITERAL => Literal(tok.value)
-      case Code.TRUE           => Literal(true)
-      case Code.FALSE          => Literal(false)
-      case Code.IDENTIFIER     => Ident(tok.value.toString)
+      case Code.TRUE => Literal(true)
+      case Code.FALSE => Literal(false)
+      case Code.IDENTIFIER => Variable(tok.value.toString)
+
+      // (expr)
       case Code.ROUND_BRACKET_LEFT =>
         val inner = parseExpression(it)
-        assertTokenCode(it.next().code, Code.ROUND_BRACKET_RIGHT)
+        assertTokenCode(it.next(), Code.ROUND_BRACKET_RIGHT)
         inner
+
+      // [expr, expr, ...]
+      case Code.SQUARE_BRACKET_LEFT =>
+        var elements = List.empty[Expression]
+        if (it.hasNext && it.head.code != Code.SQUARE_BRACKET_RIGHT) {
+          elements ::= parseExpression(it)
+          while (it.hasNext && it.head.code == Code.COMMA) {
+            it.next()
+            elements ::= parseExpression(it)
+          }
+        }
+        assertTokenCode(it.next(), Code.SQUARE_BRACKET_RIGHT)
+        ArrayLiteral(elements.reverse)
+
+      // { name := expr, expr, ... }
+      case Code.CURLY_BRACKET_LEFT =>
+        var elements = List.empty[(Option[String], Expression)]
+        if (it.hasNext && it.head.code != Code.CURLY_BRACKET_RIGHT) {
+          elements ::= parseTupleElement(it)
+          while (it.hasNext && it.head.code == Code.COMMA) {
+            it.next()
+            elements ::= parseTupleElement(it)
+          }
+        }
+        assertTokenCode(it.next(), Code.CURLY_BRACKET_RIGHT)
+        TupleLiteral(elements.reverse.map(element => TupleEntry(element._1, element._2)))
+
       case _ =>
-        throw new InvalidTokenException(tok, null)
+        throw new InvalidTokenException(tok,null)
     }
 
-    // parsing references
+    // Handle postfix (calls, indexing, field access)
     while (it.hasNext) {
       it.head.code match {
-      //function call
-        case Code.ROUND_BRACKET_LEFT =>
+        case Code.ROUND_BRACKET_LEFT => // function call
           it.next()
           var args = List.empty[Expression]
           if (it.hasNext && it.head.code != Code.ROUND_BRACKET_RIGHT) {
@@ -122,34 +151,50 @@ class ExpressionParser {
               args ::= parseExpression(it)
             }
           }
-          assertTokenCode(it.next().code, Code.ROUND_BRACKET_RIGHT)
+          assertTokenCode(it.next(), Code.ROUND_BRACKET_RIGHT)
           expr = FunctionCall(expr, args.reverse)
 
-        // array access
-        case Code.SQUARE_BRACKET_LEFT =>
+        case Code.SQUARE_BRACKET_LEFT => // array indexing
           it.next()
           val indexExpr = parseExpression(it)
-          assertTokenCode(it.next().code, Code.SQUARE_BRACKET_RIGHT)
+          assertTokenCode(it.next(), Code.SQUARE_BRACKET_RIGHT)
           expr = ArrayAccess(expr, indexExpr)
 
-        // tuple access
-        case Code.DOT =>
+        case Code.DOT => // field access
           it.next()
           val fieldTok = it.next()
           fieldTok.code match {
-            case Code.IDENTIFIER   => expr = FieldAccess(expr, fieldTok.value.toString)
-            case Code.INT_LITERAL  => expr = IndexAccess(expr, fieldTok.value.toString.toInt)
-            case _ => throw new InvalidTokenException(fieldTok,null)
+            case Code.IDENTIFIER => expr = TupleFieldAccess(expr, fieldTok.value.toString)
+            case Code.INT_LITERAL => expr = TupleIndexAccess(expr, fieldTok.value.toString.toInt)
+            case _ => throw new InvalidTokenException(fieldTok, null)
           }
+
         case _ => return expr
       }
     }
+
     expr
   }
 
-  private def assertTokenCode(actualCode:Code, expectedCode:Code): Unit = {
-    if(actualCode != expectedCode){
-      throw new InvalidTokenException(null,null)
+  private def parseTupleElement(it: BufferedIterator[Token[_]]): (Option[String], Expression) = {
+    if (it.head.code == Code.IDENTIFIER) {
+      val nameTok = it.next()
+      if (it.hasNext && it.head.code == Code.ASSIGNMENT) {
+        it.next() // :=
+        val expr = parseExpression(it)
+        return (Some(nameTok.value.toString), expr)
+      } else {
+        // not an assignment, just expr starting with identifier
+        return (None, Variable(nameTok.value.toString))
+      }
+    }
+    // unnamed element
+    (None, parseExpression(it))
+  }
+
+  private def assertTokenCode(actualToken: Token[_], expectedCode: Code): Unit = {
+    if (actualToken.code != expectedCode) {
+      throw new InvalidTokenException(actualToken , expectedCode)
     }
   }
 }
