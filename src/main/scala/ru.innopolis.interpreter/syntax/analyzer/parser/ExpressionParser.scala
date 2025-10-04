@@ -2,9 +2,11 @@ package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
 import ru.innopolis.interpreter.lexer.{Code, Token}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.{ArrayLiteral, Literal, TupleEntry, TupleLiteral}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.TypeCheck
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
 
 import scala.collection.BufferedIterator
 
@@ -87,11 +89,33 @@ class ExpressionParser {
       val op = it.next().code
       val right = parseUnary(it)
       Unary(op, right)
-    } else parsePrimary(it)
+    } else parseTypeCheck(it)
+  }
+
+
+  private def parseTypeCheck(it: BufferedIterator[Token[_]]): Expression = {
+    var expr = parsePrimary(it)
+
+    // check for 'is'
+    while (it.hasNext && it.head.code == Code.IS) {
+      it.next() // skip 'is'
+      val typeToken = it.next()
+      val typeIndicator = typeToken.code match {
+        case Code.INT => TypeIndicator.IntType
+        case Code.REAL => TypeIndicator.RealType
+        case Code.BOOL => TypeIndicator.BoolType
+        case Code.STRING => TypeIndicator.StringType
+        case Code.NONE => TypeIndicator.NoneType
+        case _ => throw new InvalidTokenException(typeToken, null)
+      }
+      expr = TypeCheck(expr, typeIndicator)
+    }
+
+    expr
   }
 
   private def parsePrimary(it: BufferedIterator[Token[_]]): Expression = {
-    if (!it.hasNext) throw new InvalidTokenException(null,null)
+    if (!it.hasNext) throw new InvalidTokenException(null, null)
 
     val tok = it.next()
     var expr: Expression = tok.code match {
@@ -134,8 +158,10 @@ class ExpressionParser {
         assertTokenCode(it.next(), Code.CURLY_BRACKET_RIGHT)
         TupleLiteral(elements.reverse.map(element => TupleEntry(element._1, element._2)))
 
+      case Code.NONE => Literal(None)
+
       case _ =>
-        throw new InvalidTokenException(tok,null)
+        throw new InvalidTokenException(tok, null)
     }
 
     // Handle postfix (calls, indexing, field access)
@@ -194,7 +220,7 @@ class ExpressionParser {
 
   private def assertTokenCode(actualToken: Token[_], expectedCode: Code): Unit = {
     if (actualToken.code != expectedCode) {
-      throw new InvalidTokenException(actualToken , expectedCode)
+      throw new InvalidTokenException(actualToken, expectedCode)
     }
   }
 }
