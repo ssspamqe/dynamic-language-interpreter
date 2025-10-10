@@ -9,7 +9,12 @@ object Main {
     val lexer = new RegexLexer()
 
     val code =
-      """var a:=""".stripMargin
+      """var x := {a:=1, b:=2, c+d}
+        |if x > 0 then
+        |    print "positive"
+        |else
+        |    print "non-positive"
+        |end""".stripMargin
 
     val tokens = lexer.tokenize(code)
 

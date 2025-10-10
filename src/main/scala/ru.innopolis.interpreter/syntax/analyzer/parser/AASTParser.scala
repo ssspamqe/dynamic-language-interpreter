@@ -2,8 +2,9 @@ package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
 import ru.innopolis.interpreter.lexer.{Code, Token}
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{IfStatement, Statement, CodeBlock}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Expression
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, IfStatement, PrintStatement, Statement}
 
 import scala.collection.BufferedIterator
 
@@ -11,7 +12,7 @@ class AASTParser {
 
   private val expressionParser = new ExpressionParser
 
-  def parse(tokens: List[Token[_]]):CodeBlock = {
+  def parse(tokens: List[Token[_]]): CodeBlock = {
     val tokenIterator = tokens.filter(t => t.code != Code.SPACE).iterator.buffered
     val topLevelStatements = scala.collection.mutable.ListBuffer.empty[Statement]
 
@@ -25,12 +26,13 @@ class AASTParser {
 
   private def parseStatement(tokenIterator: BufferedIterator[Token[_]]): Statement = {
     if (!tokenIterator.hasNext) {
-      throw new InvalidTokenException(null,null);
+      throw new InvalidTokenException(null, null);
     }
     skipTokens(tokenIterator, Set(Code.NEWLINE, Code.SPACE))
     tokenIterator.head.code match {
       case Code.VAR => parseVariableDeclaration(tokenIterator)
       case Code.IF => parseIfStatement(tokenIterator)
+      case Code.PRINT => parsePrintStatement(tokenIterator)
     }
   }
 
@@ -47,9 +49,7 @@ class AASTParser {
 
   private def parseIfStatement(iterator: BufferedIterator[Token[_]]): IfStatement = {
     assertTokenCode(iterator.next(), Code.IF) // consume 'if'
-    assertTokenCode(iterator.next(), Code.SPACE) // consume space
     val condition = expressionParser.parseExpression(iterator)
-    assertTokenCode(iterator.next(), Code.SPACE) // consume space
     // two possible forms: "then ... end" or "=> ..."
     if (iterator.hasNext && iterator.head.code == Code.THEN) {
       iterator.next() // consume 'then'
@@ -78,18 +78,41 @@ class AASTParser {
     }
   }
 
-  private def parseCodeBlock(iterator: BufferedIterator[Token[_]], endTokens: Set[Code] = Set(Code.END)): CodeBlock = {
+  private def parsePrintStatement(it: BufferedIterator[Token[_]]): PrintStatement = {
+    assertTokenCode(it.next(), Code.PRINT) // consume "print"
+
+    val expressions = scala.collection.mutable.ListBuffer.empty[Expression]
+
+    // Parse the first expression (required)
+    expressions += expressionParser.parseExpression(it)
+
+    // Handle optional comma-separated expressions
+    while (it.hasNext && it.head.code == Code.COMMA) {
+      it.next() // consume comma
+      expressions += expressionParser.parseExpression(it)
+    }
+
+    // The print statement ends with a newline
+    if (it.hasNext && it.head.code == Code.NEWLINE) {
+      it.next() // consume newline
+    }
+
+    PrintStatement(expressions.toList)
+  }
+
+  private def parseCodeBlock(iterator: BufferedIterator[Token[_]], endTokens: Set[Code] = Set(Code.END, Code.ELSE)): CodeBlock = {
     val statements = scala.collection.mutable.ListBuffer.empty[Statement]
 
     while (iterator.hasNext && !endTokens.contains(iterator.head.code)) {
       statements.addOne(parseStatement(iterator))
+      skipTokens(iterator, Set(Code.NEWLINE))
     }
 
     CodeBlock(statements.toList)
   }
 
-  private def skipTokens(iterator: BufferedIterator[Token[_]], tokensToSkip:Set[Code]): Unit = {
-    while(iterator.hasNext && tokensToSkip.contains(iterator.head.code)){
+  private def skipTokens(iterator: BufferedIterator[Token[_]], tokensToSkip: Set[Code]): Unit = {
+    while (iterator.hasNext && tokensToSkip.contains(iterator.head.code)) {
       iterator.next()
     }
   }

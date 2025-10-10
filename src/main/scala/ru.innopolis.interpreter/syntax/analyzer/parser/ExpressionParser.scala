@@ -145,16 +145,17 @@ class ExpressionParser {
         assertTokenCode(it.next(), Code.SQUARE_BRACKET_RIGHT)
         ArrayLiteral(elements.reverse)
 
-      // { name := expr, expr, ... }
       case Code.CURLY_BRACKET_LEFT =>
         var elements = List.empty[(Option[String], Expression)]
+
         if (it.hasNext && it.head.code != Code.CURLY_BRACKET_RIGHT) {
           elements ::= parseTupleElement(it)
           while (it.hasNext && it.head.code == Code.COMMA) {
-            it.next()
+            it.next() // consume comma
             elements ::= parseTupleElement(it)
           }
         }
+
         assertTokenCode(it.next(), Code.CURLY_BRACKET_RIGHT)
         TupleLiteral(elements.reverse.map(element => TupleEntry(element._1, element._2)))
 
@@ -203,20 +204,28 @@ class ExpressionParser {
   }
 
   private def parseTupleElement(it: BufferedIterator[Token[_]]): (Option[String], Expression) = {
-    if (it.head.code == Code.IDENTIFIER) {
-      val nameTok = it.next()
-      if (it.hasNext && it.head.code == Code.ASSIGNMENT) {
-        it.next() // :=
+    if (!it.hasNext) throw new InvalidTokenException(null,null)
+
+    // Peek first token
+    val first = it.head
+
+    // If it starts with an identifier followed by :=
+    if (first.code == Code.IDENTIFIER) {
+      if(it.toList(1).code == Code.ASSIGNMENT){
+        val idTok = it.next()
+        it.next()
         val expr = parseExpression(it)
-        return (Some(nameTok.value.toString), expr)
+        return (Some(idTok.value.toString), expr)
       } else {
-        // not an assignment, just expr starting with identifier
-        return (None, Variable(nameTok.value.toString))
+        val expr = parseExpression(it)
+        return (None, expr)
       }
     }
-    // unnamed element
+
+    // Otherwise, it’s a normal expression
     (None, parseExpression(it))
   }
+
 
   private def assertTokenCode(actualToken: Token[_], expectedCode: Code): Unit = {
     if (actualToken.code != expectedCode) {
