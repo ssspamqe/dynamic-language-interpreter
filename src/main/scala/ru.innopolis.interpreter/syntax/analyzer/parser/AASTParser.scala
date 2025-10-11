@@ -2,10 +2,11 @@ package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
 import ru.innopolis.interpreter.lexer.{Code, Token}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Expression
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, TupleFieldAccess, TupleIndexAccess}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
 
 class AASTParser(tokens: List[Token[_]]) {
 
@@ -29,28 +30,35 @@ class AASTParser(tokens: List[Token[_]]) {
       case Code.IF    => parseIfStatement()
       case Code.PRINT => parsePrintStatement()
 
-      // handle t[10] := something
       case Code.IDENTIFIER =>
-        // Peek ahead to detect array element assignment
+        // Parse expression and check if it's an assignment
         val expr = exprParser.parseExpression()
         if (stream.hasNext && stream.current.code == Code.ASSIGNMENT)
           parseAssignment(expr)
         else
           ExpressionStatement(expr)
 
-      case _ => throw new InvalidTokenException(stream.current, null)
+      case _ =>
+        val expr = exprParser.parseExpression()
+        ExpressionStatement(expr)
     }
   }
 
-  /** Handles t[10] := expr type assignment */
-  private def parseAssignment(lhs: Expression): Statement = lhs match {
-    case ArrayAccess(target, index) =>
-      stream.expect(Code.ASSIGNMENT)
-      val valueExpr = exprParser.parseExpression()
-      ArrayElementAssignment(target, index, valueExpr)
+  /** Handles all types of assignments: x := value, x.field := value, x.1 := value, x[index] := value */
+  private def parseAssignment(lhs: Expression): Statement = {
+    stream.expect(Code.ASSIGNMENT)
+    val valueExpr = exprParser.parseExpression()
 
-    case _ =>
-      throw new InvalidTokenException(stream.current, Code.ASSIGNMENT)
+    lhs match {
+      case Variable(name) =>
+        VariableAssignment(name, valueExpr)
+
+      case ArrayAccess(target, index) =>
+        ArrayElementAssignment(target, index, valueExpr)
+
+      case _ =>
+        throw new InvalidTokenException(stream.current, Code.ASSIGNMENT)
+    }
   }
 
   private def parseVariableDeclaration(): VariableDeclaration = {

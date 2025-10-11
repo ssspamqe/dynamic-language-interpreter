@@ -7,8 +7,9 @@ object Main {
     val lexer = new RegexLexer()
 
     val code =
-      """var x := []
-        |x[10]:=25
+      """x := []
+        |x[1]:=x.123
+        |1+1
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)
