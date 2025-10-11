@@ -5,5 +5,5 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.CodeBlock
 
 case class CollectionLoop(ident: Option[String],
                           collection: Expression,
-                          body: CodeBlock
+                          override val body: CodeBlock
                          ) extends ForLoop(ident, body)

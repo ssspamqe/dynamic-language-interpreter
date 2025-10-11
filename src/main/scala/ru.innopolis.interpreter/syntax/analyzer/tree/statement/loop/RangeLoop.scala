@@ -6,5 +6,5 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.CodeBlock
 case class RangeLoop(ident: Option[String],
                      from:Expression,
                      to:Expression,
-                     body:CodeBlock
+                     override val body:CodeBlock
                   ) extends ForLoop(ident, body)

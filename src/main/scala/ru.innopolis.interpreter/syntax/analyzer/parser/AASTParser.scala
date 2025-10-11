@@ -5,8 +5,9 @@ import ru.innopolis.interpreter.lexer.{Code, Token}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, TupleFieldAccess, TupleIndexAccess}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.Loop
 
 class AASTParser(tokens: List[Token[_]]) {
 
@@ -29,7 +30,8 @@ class AASTParser(tokens: List[Token[_]]) {
       case Code.VAR   => parseVariableDeclaration()
       case Code.IF    => parseIfStatement()
       case Code.PRINT => parsePrintStatement()
-
+      case Code.LOOP => parseLoopStatement()
+      case Code.EXIT => parseExitStatement()
       case Code.IDENTIFIER =>
         // Parse expression and check if it's an assignment
         val expr = exprParser.parseExpression()
@@ -44,7 +46,18 @@ class AASTParser(tokens: List[Token[_]]) {
     }
   }
 
-  /** Handles all types of assignments: x := value, x.field := value, x.1 := value, x[index] := value */
+  private def parseLoopStatement(): Loop  = {
+    stream.expect(Code.LOOP)
+    val body = parseCodeBlock(Set(Code.END))
+    stream.expect(Code.END)
+    new Loop(body)
+  }
+
+  private def parseExitStatement():ExitStatement = {
+    stream.expect(Code.EXIT)
+    ExitStatement()
+  }
+
   private def parseAssignment(lhs: Expression): Statement = {
     stream.expect(Code.ASSIGNMENT)
     val valueExpr = exprParser.parseExpression()

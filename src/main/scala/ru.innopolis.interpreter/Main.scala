@@ -6,10 +6,21 @@ object Main {
   def main(args: Array[String]): Unit = {
     val lexer = new RegexLexer()
 
+//    val code =
+//      """loop
+//        |  x := 10
+//        |  y := 20
+//        |  print x+y
+//        |end
+//        |""".stripMargin
+
     val code =
-      """x := []
-        |x[1]:=x.123
-        |1+1
+      """loop
+        |  x := 10
+        |  y := 20
+        |  print x+y
+        |  if x>y => exit
+        |end
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)
