@@ -1,12 +1,13 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
-import ru.innopolis.interpreter.lexer.{Code, Token}
+import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.{ArrayLiteral, Literal, TupleEntry, TupleLiteral}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.{TypeCheck}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
+
 
 class ExpressionParser(stream: TokenStream) {
 
@@ -92,7 +93,6 @@ class ExpressionParser(stream: TokenStream) {
 
   private def parseTypeCheck(): Expression = {
     var expr = parsePrimary()
-
     while (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
       val typeToken = stream.next()
@@ -106,14 +106,13 @@ class ExpressionParser(stream: TokenStream) {
       }
       expr = TypeCheck(expr, typeIndicator)
     }
-
     expr
   }
 
   private def parsePrimary(): Expression = {
     if (!stream.hasNext) throw new InvalidTokenException(null, null)
-
     val tok = stream.next()
+
     var expr: Expression = tok.code match {
       case Code.INT_LITERAL => Literal(tok.value)
       case Code.REAL_LITERAL => Literal(tok.value)
@@ -126,24 +125,20 @@ class ExpressionParser(stream: TokenStream) {
         stream.expect(Code.ROUND_BRACKET_RIGHT)
         inner
       case Code.SQUARE_BRACKET_LEFT =>
-        val elements = parseArrayElements()
-        ArrayLiteral(elements)
+        ArrayLiteral(parseArrayElements())
       case Code.CURLY_BRACKET_LEFT =>
-        val elements = parseTupleElements()
-        TupleLiteral(elements.map { case (k, v) => TupleEntry(k, v) })
+        val elems = parseTupleElements()
+        TupleLiteral(elems.map { case (k, v) => TupleEntry(k, v) })
       case Code.NONE => Literal(None)
       case _ => throw new InvalidTokenException(tok, null)
     }
 
-    // postfix ops
+    // postfix ops (calls, indexing, access)
     while (stream.hasNext) {
       stream.current.code match {
-        case Code.ROUND_BRACKET_LEFT =>
-          expr = parseFunctionCall(expr)
-        case Code.SQUARE_BRACKET_LEFT =>
-          expr = parseArrayAccess(expr)
-        case Code.DOT =>
-          expr = parseDotAccess(expr)
+        case Code.ROUND_BRACKET_LEFT => expr = parseFunctionCall(expr)
+        case Code.SQUARE_BRACKET_LEFT => expr = parseArrayAccess(expr)
+        case Code.DOT => expr = parseDotAccess(expr)
         case _ => return expr
       }
     }
@@ -177,21 +172,17 @@ class ExpressionParser(stream: TokenStream) {
   }
 
   private def parseTupleElement(): (Option[String], Expression) = {
-    if (!stream.hasNext) throw new InvalidTokenException(null, null)
     val first = stream.current
-
     if (first.code == Code.IDENTIFIER && stream.peek(1).exists(_.code == Code.ASSIGNMENT)) {
-      val idTok = stream.next()
-      stream.next() // :=
+      val id = stream.next()
+      stream.next()
       val expr = parseExpression()
-      (Some(idTok.value.toString), expr)
-    } else {
-      (None, parseExpression())
-    }
+      (Some(id.value.toString), expr)
+    } else (None, parseExpression())
   }
 
   private def parseFunctionCall(expr: Expression): Expression = {
-    stream.next() // (
+    stream.next()
     var args = List.empty[Expression]
     if (stream.hasNext && stream.current.code != Code.ROUND_BRACKET_RIGHT) {
       args ::= parseExpression()
@@ -206,9 +197,9 @@ class ExpressionParser(stream: TokenStream) {
 
   private def parseArrayAccess(expr: Expression): Expression = {
     stream.next()
-    val indexExpr = parseExpression()
+    val idxExpr = parseExpression()
     stream.expect(Code.SQUARE_BRACKET_RIGHT)
-    ArrayAccess(expr, indexExpr)
+    ArrayAccess(expr, idxExpr)
   }
 
   private def parseDotAccess(expr: Expression): Expression = {
