@@ -5,101 +5,97 @@ import ru.innopolis.interpreter.lexer.{Code, Token}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.{ArrayLiteral, Literal, TupleEntry, TupleLiteral}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.TypeCheck
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.{TypeCheck}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
 
-import scala.collection.BufferedIterator
+class ExpressionParser(stream: TokenStream) {
 
-class ExpressionParser {
+  def parseExpression(): Expression = parseOr()
 
-  def parseExpression(it: BufferedIterator[Token[_]]): Expression = parseOr(it)
-
-  private def parseOr(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseXor(it)
-    while (it.hasNext && it.head.code == Code.OR) {
-      val op = it.next().code
-      val right = parseXor(it)
+  private def parseOr(): Expression = {
+    var expr = parseXor()
+    while (stream.hasNext && stream.current.code == Code.OR) {
+      val op = stream.next().code
+      val right = parseXor()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseXor(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseAnd(it)
-    while (it.hasNext && it.head.code == Code.XOR) {
-      val op = it.next().code
-      val right = parseAnd(it)
+  private def parseXor(): Expression = {
+    var expr = parseAnd()
+    while (stream.hasNext && stream.current.code == Code.XOR) {
+      val op = stream.next().code
+      val right = parseAnd()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseAnd(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseEquality(it)
-    while (it.hasNext && it.head.code == Code.AND) {
-      val op = it.next().code
-      val right = parseEquality(it)
+  private def parseAnd(): Expression = {
+    var expr = parseEquality()
+    while (stream.hasNext && stream.current.code == Code.AND) {
+      val op = stream.next().code
+      val right = parseEquality()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseEquality(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseComparison(it)
-    while (it.hasNext && Set(Code.EQUAL, Code.NOT_EQUAL).contains(it.head.code)) {
-      val op = it.next().code
-      val right = parseComparison(it)
+  private def parseEquality(): Expression = {
+    var expr = parseComparison()
+    while (stream.hasNext && Set(Code.EQUAL, Code.NOT_EQUAL).contains(stream.current.code)) {
+      val op = stream.next().code
+      val right = parseComparison()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseComparison(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseTerm(it)
-    while (it.hasNext && Set(Code.LESS, Code.LESS_OR_EQUAL, Code.MORE, Code.MORE_OR_EQUAL).contains(it.head.code)) {
-      val op = it.next().code
-      val right = parseTerm(it)
+  private def parseComparison(): Expression = {
+    var expr = parseTerm()
+    while (stream.hasNext && Set(Code.LESS, Code.LESS_OR_EQUAL, Code.MORE, Code.MORE_OR_EQUAL).contains(stream.current.code)) {
+      val op = stream.next().code
+      val right = parseTerm()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseTerm(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseFactor(it)
-    while (it.hasNext && Set(Code.PLUS, Code.MINUS).contains(it.head.code)) {
-      val op = it.next().code
-      val right = parseFactor(it)
+  private def parseTerm(): Expression = {
+    var expr = parseFactor()
+    while (stream.hasNext && Set(Code.PLUS, Code.MINUS).contains(stream.current.code)) {
+      val op = stream.next().code
+      val right = parseFactor()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseFactor(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parseUnary(it)
-    while (it.hasNext && Set(Code.MULTIPLICATION, Code.DIVISION).contains(it.head.code)) {
-      val op = it.next().code
-      val right = parseUnary(it)
+  private def parseFactor(): Expression = {
+    var expr = parseUnary()
+    while (stream.hasNext && Set(Code.MULTIPLICATION, Code.DIVISION).contains(stream.current.code)) {
+      val op = stream.next().code
+      val right = parseUnary()
       expr = Binary(op, expr, right)
     }
     expr
   }
 
-  private def parseUnary(it: BufferedIterator[Token[_]]): Expression = {
-    if (it.hasNext && Set(Code.MINUS, Code.NOT).contains(it.head.code)) {
-      val op = it.next().code
-      val right = parseUnary(it)
+  private def parseUnary(): Expression = {
+    if (stream.hasNext && Set(Code.MINUS, Code.NOT).contains(stream.current.code)) {
+      val op = stream.next().code
+      val right = parseUnary()
       Unary(op, right)
-    } else parseTypeCheck(it)
+    } else parseTypeCheck()
   }
 
+  private def parseTypeCheck(): Expression = {
+    var expr = parsePrimary()
 
-  private def parseTypeCheck(it: BufferedIterator[Token[_]]): Expression = {
-    var expr = parsePrimary(it)
-
-    // check for 'is'
-    while (it.hasNext && it.head.code == Code.IS) {
-      it.next() // skip 'is'
-      val typeToken = it.next()
+    while (stream.hasNext && stream.current.code == Code.IS) {
+      stream.next()
+      val typeToken = stream.next()
       val typeIndicator = typeToken.code match {
         case Code.INT => TypeIndicator.IntType
         case Code.REAL => TypeIndicator.RealType
@@ -114,10 +110,10 @@ class ExpressionParser {
     expr
   }
 
-  private def parsePrimary(it: BufferedIterator[Token[_]]): Expression = {
-    if (!it.hasNext) throw new InvalidTokenException(null, null)
+  private def parsePrimary(): Expression = {
+    if (!stream.hasNext) throw new InvalidTokenException(null, null)
 
-    val tok = it.next()
+    val tok = stream.next()
     var expr: Expression = tok.code match {
       case Code.INT_LITERAL => Literal(tok.value)
       case Code.REAL_LITERAL => Literal(tok.value)
@@ -125,111 +121,103 @@ class ExpressionParser {
       case Code.TRUE => Literal(true)
       case Code.FALSE => Literal(false)
       case Code.IDENTIFIER => Variable(tok.value.toString)
-
-      // (expr)
       case Code.ROUND_BRACKET_LEFT =>
-        val inner = parseExpression(it)
-        assertTokenCode(it.next(), Code.ROUND_BRACKET_RIGHT)
+        val inner = parseExpression()
+        stream.expect(Code.ROUND_BRACKET_RIGHT)
         inner
-
-      // [expr, expr, ...]
       case Code.SQUARE_BRACKET_LEFT =>
-        var elements = List.empty[Expression]
-        if (it.hasNext && it.head.code != Code.SQUARE_BRACKET_RIGHT) {
-          elements ::= parseExpression(it)
-          while (it.hasNext && it.head.code == Code.COMMA) {
-            it.next()
-            elements ::= parseExpression(it)
-          }
-        }
-        assertTokenCode(it.next(), Code.SQUARE_BRACKET_RIGHT)
-        ArrayLiteral(elements.reverse)
-
+        val elements = parseArrayElements()
+        ArrayLiteral(elements)
       case Code.CURLY_BRACKET_LEFT =>
-        var elements = List.empty[(Option[String], Expression)]
-
-        if (it.hasNext && it.head.code != Code.CURLY_BRACKET_RIGHT) {
-          elements ::= parseTupleElement(it)
-          while (it.hasNext && it.head.code == Code.COMMA) {
-            it.next() // consume comma
-            elements ::= parseTupleElement(it)
-          }
-        }
-
-        assertTokenCode(it.next(), Code.CURLY_BRACKET_RIGHT)
-        TupleLiteral(elements.reverse.map(element => TupleEntry(element._1, element._2)))
-
+        val elements = parseTupleElements()
+        TupleLiteral(elements.map { case (k, v) => TupleEntry(k, v) })
       case Code.NONE => Literal(None)
-
-      case _ =>
-        throw new InvalidTokenException(tok, null)
+      case _ => throw new InvalidTokenException(tok, null)
     }
 
-    // Handle postfix (calls, indexing, field access)
-    while (it.hasNext) {
-      it.head.code match {
-        case Code.ROUND_BRACKET_LEFT => // function call
-          it.next()
-          var args = List.empty[Expression]
-          if (it.hasNext && it.head.code != Code.ROUND_BRACKET_RIGHT) {
-            args ::= parseExpression(it)
-            while (it.hasNext && it.head.code == Code.COMMA) {
-              it.next()
-              args ::= parseExpression(it)
-            }
-          }
-          assertTokenCode(it.next(), Code.ROUND_BRACKET_RIGHT)
-          expr = FunctionCall(expr, args.reverse)
-
-        case Code.SQUARE_BRACKET_LEFT => // array indexing
-          it.next()
-          val indexExpr = parseExpression(it)
-          assertTokenCode(it.next(), Code.SQUARE_BRACKET_RIGHT)
-          expr = ArrayAccess(expr, indexExpr)
-
-        case Code.DOT => // field access
-          it.next()
-          val fieldTok = it.next()
-          fieldTok.code match {
-            case Code.IDENTIFIER => expr = TupleFieldAccess(expr, fieldTok.value.toString)
-            case Code.INT_LITERAL => expr = TupleIndexAccess(expr, fieldTok.value.toString.toInt)
-            case _ => throw new InvalidTokenException(fieldTok, null)
-          }
-
+    // postfix ops
+    while (stream.hasNext) {
+      stream.current.code match {
+        case Code.ROUND_BRACKET_LEFT =>
+          expr = parseFunctionCall(expr)
+        case Code.SQUARE_BRACKET_LEFT =>
+          expr = parseArrayAccess(expr)
+        case Code.DOT =>
+          expr = parseDotAccess(expr)
         case _ => return expr
       }
     }
-
     expr
   }
 
-  private def parseTupleElement(it: BufferedIterator[Token[_]]): (Option[String], Expression) = {
-    if (!it.hasNext) throw new InvalidTokenException(null,null)
-
-    // Peek first token
-    val first = it.head
-
-    // If it starts with an identifier followed by :=
-    if (first.code == Code.IDENTIFIER) {
-      if(it.toList(1).code == Code.ASSIGNMENT){
-        val idTok = it.next()
-        it.next()
-        val expr = parseExpression(it)
-        return (Some(idTok.value.toString), expr)
-      } else {
-        val expr = parseExpression(it)
-        return (None, expr)
+  private def parseArrayElements(): List[Expression] = {
+    var elements = List.empty[Expression]
+    if (stream.hasNext && stream.current.code != Code.SQUARE_BRACKET_RIGHT) {
+      elements ::= parseExpression()
+      while (stream.hasNext && stream.current.code == Code.COMMA) {
+        stream.next()
+        elements ::= parseExpression()
       }
     }
-
-    // Otherwise, it’s a normal expression
-    (None, parseExpression(it))
+    stream.expect(Code.SQUARE_BRACKET_RIGHT)
+    elements.reverse
   }
 
+  private def parseTupleElements(): List[(Option[String], Expression)] = {
+    var elements = List.empty[(Option[String], Expression)]
+    if (stream.hasNext && stream.current.code != Code.CURLY_BRACKET_RIGHT) {
+      elements ::= parseTupleElement()
+      while (stream.hasNext && stream.current.code == Code.COMMA) {
+        stream.next()
+        elements ::= parseTupleElement()
+      }
+    }
+    stream.expect(Code.CURLY_BRACKET_RIGHT)
+    elements.reverse
+  }
 
-  private def assertTokenCode(actualToken: Token[_], expectedCode: Code): Unit = {
-    if (actualToken.code != expectedCode) {
-      throw new InvalidTokenException(actualToken, expectedCode)
+  private def parseTupleElement(): (Option[String], Expression) = {
+    if (!stream.hasNext) throw new InvalidTokenException(null, null)
+    val first = stream.current
+
+    if (first.code == Code.IDENTIFIER && stream.peek(1).exists(_.code == Code.ASSIGNMENT)) {
+      val idTok = stream.next()
+      stream.next() // :=
+      val expr = parseExpression()
+      (Some(idTok.value.toString), expr)
+    } else {
+      (None, parseExpression())
+    }
+  }
+
+  private def parseFunctionCall(expr: Expression): Expression = {
+    stream.next() // (
+    var args = List.empty[Expression]
+    if (stream.hasNext && stream.current.code != Code.ROUND_BRACKET_RIGHT) {
+      args ::= parseExpression()
+      while (stream.hasNext && stream.current.code == Code.COMMA) {
+        stream.next()
+        args ::= parseExpression()
+      }
+    }
+    stream.expect(Code.ROUND_BRACKET_RIGHT)
+    FunctionCall(expr, args.reverse)
+  }
+
+  private def parseArrayAccess(expr: Expression): Expression = {
+    stream.next()
+    val indexExpr = parseExpression()
+    stream.expect(Code.SQUARE_BRACKET_RIGHT)
+    ArrayAccess(expr, indexExpr)
+  }
+
+  private def parseDotAccess(expr: Expression): Expression = {
+    stream.next()
+    val fieldTok = stream.next()
+    fieldTok.code match {
+      case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
+      case Code.INT_LITERAL => TupleIndexAccess(expr, fieldTok.value.toString.toInt)
+      case _ => throw new InvalidTokenException(fieldTok, null)
     }
   }
 }

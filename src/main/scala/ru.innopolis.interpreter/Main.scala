@@ -9,7 +9,7 @@ object Main {
     val lexer = new RegexLexer()
 
     val code =
-      """var x := {a:=1, b:=2, c+d}
+      """var x := [1,2,3,4,5]
         |if x > 0 then
         |    print "positive"
         |else
@@ -18,9 +18,8 @@ object Main {
 
     val tokens = lexer.tokenize(code)
 
-    val parser = new AASTParser
-    var expressionParser = new ExpressionParser
-    var expression = parser.parse(tokens)
+    val parser = new AASTParser(tokens)
+    var expression = parser.parse()
 
 
     for (token <- tokens) {
