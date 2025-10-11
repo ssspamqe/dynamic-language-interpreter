@@ -7,12 +7,9 @@ object Main {
     val lexer = new RegexLexer()
 
     val code =
-      """var x := {1,2,1+2}
-        |if x > 0 then
-        |    print "positive"
-        |else
-        |    print "non-positive"
-        |end""".stripMargin
+      """var x := []
+        |x[10]:=25
+        |""".stripMargin
 
     val tokens = lexer.tokenize(code)
     val parser = new AASTParser(tokens)

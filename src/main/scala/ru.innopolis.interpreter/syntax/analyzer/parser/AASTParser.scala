@@ -2,13 +2,14 @@ package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
 import ru.innopolis.interpreter.lexer.{Code, Token}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Expression
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.{FunctionDeclaration, VariableDeclaration}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 
 class AASTParser(tokens: List[Token[_]]) {
 
-  private val stream = new TokenStream(tokens.filter(t => t.code != Code.SPACE))
-
+  private val stream = new TokenStream(tokens.filter(_.code != Code.SPACE))
   private val exprParser = new ExpressionParser(stream)
 
   def parse(): CodeBlock = {
@@ -22,12 +23,34 @@ class AASTParser(tokens: List[Token[_]]) {
 
   private def parseStatement(): Statement = {
     if (!stream.hasNext) throw new InvalidTokenException(null, null)
+
     stream.current.code match {
-      case Code.VAR => parseVariableDeclaration()
-      case Code.IF => parseIfStatement()
+      case Code.VAR   => parseVariableDeclaration()
+      case Code.IF    => parseIfStatement()
       case Code.PRINT => parsePrintStatement()
+
+      // handle t[10] := something
+      case Code.IDENTIFIER =>
+        // Peek ahead to detect array element assignment
+        val expr = exprParser.parseExpression()
+        if (stream.hasNext && stream.current.code == Code.ASSIGNMENT)
+          parseAssignment(expr)
+        else
+          ExpressionStatement(expr)
+
       case _ => throw new InvalidTokenException(stream.current, null)
     }
+  }
+
+  /** Handles t[10] := expr type assignment */
+  private def parseAssignment(lhs: Expression): Statement = lhs match {
+    case ArrayAccess(target, index) =>
+      stream.expect(Code.ASSIGNMENT)
+      val valueExpr = exprParser.parseExpression()
+      ArrayElementAssignment(target, index, valueExpr)
+
+    case _ =>
+      throw new InvalidTokenException(stream.current, Code.ASSIGNMENT)
   }
 
   private def parseVariableDeclaration(): VariableDeclaration = {
