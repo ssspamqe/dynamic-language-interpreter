@@ -2,12 +2,12 @@ package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
 import ru.innopolis.interpreter.lexer.{Code, Token}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{Loop, WhileLoop}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{CollectionLoop, Loop, RangeLoop, WhileLoop}
 
 class AASTParser(tokens: List[Token[_]]) {
 
@@ -27,10 +27,11 @@ class AASTParser(tokens: List[Token[_]]) {
     if (!stream.hasNext) throw new InvalidTokenException(null, null)
 
     stream.current.code match {
-      case Code.VAR   => parseVariableDeclaration()
-      case Code.IF    => parseIfStatement()
+      case Code.VAR => parseVariableDeclaration()
+      case Code.IF => parseIfStatement()
       case Code.PRINT => parsePrintStatement()
-      case Code.LOOP => parseLoopStatement()
+      case Code.LOOP => parseInfiniteLoopStatement()
+      case Code.FOR => parseForLoop()
       case Code.EXIT => parseExitStatement()
       case Code.WHILE => parseWhileStatement()
       case Code.IDENTIFIER =>
@@ -47,23 +48,48 @@ class AASTParser(tokens: List[Token[_]]) {
     }
   }
 
-  private def parseWhileStatement() : WhileLoop = {
-    stream.expect(Code.WHILE)
-    val condition = expressionParser.parseExpression()
-    stream.expect(Code.LOOP)
-    val body = parseCodeBlock(Set(Code.END))
-    stream.expect(Code.END)
-    WhileLoop(condition, body)
+  private def parseForLoop(): Loop = {
+    stream.expect(Code.FOR)
+    if (stream.peek().exists(_.code == Code.IDENTIFIER)
+      && stream.peek(1).exists(_.code == Code.IN)) { // then it has ident
+      val id = stream.expect(Code.IDENTIFIER)
+      stream.expect(Code.IN)
+      val collectionOrRangeFrom = expressionParser.parseExpression()
+
+      if(stream.peek().exists(_.code == Code.RANGE)){
+        stream.expect(Code.RANGE)
+        val rangeTo = expressionParser.parseExpression()
+        val loopBody = parseInfiniteLoopStatement()
+        return RangeLoop(Some(id.value.toString), collectionOrRangeFrom, rangeTo, loopBody.body)
+      }
+
+      val loopBody = parseInfiniteLoopStatement()
+      return CollectionLoop(id.value.toString, collectionOrRangeFrom, loopBody.body)
+    }
+
+    val rangeFrom = expressionParser.parseExpression()
+    stream.expect(Code.RANGE)
+    val rangeTo = expressionParser.parseExpression()
+    val loopBody = parseInfiniteLoopStatement()
+    RangeLoop(None, rangeFrom, rangeTo, loopBody.body)
   }
 
-  private def parseLoopStatement(): Loop  = {
+
+  private def parseWhileStatement(): WhileLoop = {
+    stream.expect(Code.WHILE)
+    val condition = expressionParser.parseExpression()
+    val loopBody = parseInfiniteLoopStatement();
+    WhileLoop(condition, loopBody.body)
+  }
+
+  private def parseInfiniteLoopStatement(): Loop = {
     stream.expect(Code.LOOP)
     val body = parseCodeBlock(Set(Code.END))
     stream.expect(Code.END)
     new Loop(body)
   }
 
-  private def parseExitStatement():ExitStatement = {
+  private def parseExitStatement(): ExitStatement = {
     stream.expect(Code.EXIT)
     ExitStatement()
   }
