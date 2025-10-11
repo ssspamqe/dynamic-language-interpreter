@@ -7,12 +7,12 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.Loop
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{Loop, WhileLoop}
 
 class AASTParser(tokens: List[Token[_]]) {
 
   private val stream = new TokenStream(tokens.filter(_.code != Code.SPACE))
-  private val exprParser = new ExpressionParser(stream)
+  private val expressionParser = new ExpressionParser(stream)
 
   def parse(): CodeBlock = {
     val stmts = scala.collection.mutable.ListBuffer.empty[Statement]
@@ -32,18 +32,28 @@ class AASTParser(tokens: List[Token[_]]) {
       case Code.PRINT => parsePrintStatement()
       case Code.LOOP => parseLoopStatement()
       case Code.EXIT => parseExitStatement()
+      case Code.WHILE => parseWhileStatement()
       case Code.IDENTIFIER =>
         // Parse expression and check if it's an assignment
-        val expr = exprParser.parseExpression()
+        val expr = expressionParser.parseExpression()
         if (stream.hasNext && stream.current.code == Code.ASSIGNMENT)
           parseAssignment(expr)
         else
           ExpressionStatement(expr)
 
       case _ =>
-        val expr = exprParser.parseExpression()
+        val expr = expressionParser.parseExpression()
         ExpressionStatement(expr)
     }
+  }
+
+  private def parseWhileStatement() : WhileLoop = {
+    stream.expect(Code.WHILE)
+    val condition = expressionParser.parseExpression()
+    stream.expect(Code.LOOP)
+    val body = parseCodeBlock(Set(Code.END))
+    stream.expect(Code.END)
+    WhileLoop(condition, body)
   }
 
   private def parseLoopStatement(): Loop  = {
@@ -60,7 +70,7 @@ class AASTParser(tokens: List[Token[_]]) {
 
   private def parseAssignment(lhs: Expression): Statement = {
     stream.expect(Code.ASSIGNMENT)
-    val valueExpr = exprParser.parseExpression()
+    val valueExpr = expressionParser.parseExpression()
 
     lhs match {
       case Variable(name) =>
@@ -78,13 +88,13 @@ class AASTParser(tokens: List[Token[_]]) {
     stream.expect(Code.VAR)
     val id = stream.expect(Code.IDENTIFIER)
     stream.expect(Code.ASSIGNMENT)
-    val expr = exprParser.parseExpression()
+    val expr = expressionParser.parseExpression()
     VariableDeclaration(id.value.toString, expr)
   }
 
   private def parseIfStatement(): IfStatement = {
     stream.expect(Code.IF)
-    val condition = exprParser.parseExpression()
+    val condition = expressionParser.parseExpression()
     if (stream.current.code == Code.THEN) {
       stream.next()
       val thenBlock = parseCodeBlock(Set(Code.ELSE, Code.END))
@@ -104,10 +114,10 @@ class AASTParser(tokens: List[Token[_]]) {
 
   private def parsePrintStatement(): PrintStatement = {
     stream.expect(Code.PRINT)
-    val exprs = scala.collection.mutable.ListBuffer(exprParser.parseExpression())
+    val exprs = scala.collection.mutable.ListBuffer(expressionParser.parseExpression())
     while (stream.hasNext && stream.current.code == Code.COMMA) {
       stream.next()
-      exprs += exprParser.parseExpression()
+      exprs += expressionParser.parseExpression()
     }
     stream.skipIf(Code.NEWLINE)
     PrintStatement(exprs.toList)

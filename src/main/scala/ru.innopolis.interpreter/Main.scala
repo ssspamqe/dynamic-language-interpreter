@@ -15,11 +15,8 @@ object Main {
 //        |""".stripMargin
 
     val code =
-      """loop
-        |  x := 10
-        |  y := 20
-        |  print x+y
-        |  if x>y => exit
+      """while x>10 loop
+        |print 10
         |end
         |""".stripMargin
 
