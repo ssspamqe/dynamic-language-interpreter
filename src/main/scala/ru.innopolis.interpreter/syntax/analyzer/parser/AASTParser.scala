@@ -1,7 +1,7 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
 import ru.innopolis.interpreter.exception.InvalidTokenException
-import ru.innopolis.interpreter.lexer.{Code, Token}
+import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
@@ -32,6 +32,7 @@ class AASTParser(private val stream: TokenStream) {
       case Code.FOR => parseForLoop()
       case Code.EXIT => parseExitStatement()
       case Code.WHILE => parseWhileStatement()
+      case Code.RETURN => parseReturnStatement()
       case Code.IDENTIFIER =>
         val expr = exprParser.parseExpression()
         if (stream.hasNext && stream.current.code == Code.ASSIGNMENT)
@@ -41,6 +42,14 @@ class AASTParser(private val stream: TokenStream) {
         val expr = exprParser.parseExpression()
         ExpressionStatement(expr)
     }
+  }
+
+  private def parseReturnStatement(): ReturnStatement = {
+    stream.expect(Code.RETURN)
+    if (!stream.hasNext || Set(Code.NEWLINE, Code.SEMICOLON, Code.END, Code.ELSE).contains(stream.current.code))
+      ReturnStatement(None)
+    else
+      ReturnStatement(Some(exprParser.parseExpression()))
   }
 
   private def parseVariableDeclaration(): VariableDeclaration = {
@@ -74,10 +83,6 @@ class AASTParser(private val stream: TokenStream) {
         } else None
       stream.expect(Code.END)
       IfStatement(cond, thenBlock, elseBlock)
-    } else if (stream.current.code == Code.LAMBDA) {
-      stream.next()
-      val thenBlock = parseCodeBlock(Set(Code.NEWLINE, Code.SEMICOLON))
-      IfStatement(cond, thenBlock, None)
     } else throw new InvalidTokenException(stream.current, Code.THEN)
   }
 
@@ -136,8 +141,7 @@ class AASTParser(private val stream: TokenStream) {
     ExitStatement()
   }
 
-
-  def parseFunctionBody():CodeBlock = {
+  def parseFunctionBody(): CodeBlock = {
     if (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
       val codeBlock = parseCodeBlock(Set(Code.END))

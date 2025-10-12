@@ -16,7 +16,9 @@ object Main {
 //        |""".stripMargin
 
     val code =
-      """var i := func => a+b
+      """var i := func(a,b) is
+        |return 1+12+c+{1,vb}
+        |end
         |
         |print(func(a,b) => a+b)
         |""".stripMargin
