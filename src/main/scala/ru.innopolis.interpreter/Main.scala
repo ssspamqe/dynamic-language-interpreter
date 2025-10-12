@@ -1,6 +1,7 @@
 package ru.innopolis.interpreter
 
 
+import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, ExpressionParser, TokenStream}
 object Main {
   def main(args: Array[String]): Unit = {
@@ -15,13 +16,14 @@ object Main {
 //        |""".stripMargin
 
     val code =
-      """for x in y..1 loop
-        |a+b
-        |end
+      """var i := func => a+b
+        |
+        |print(func(a,b) => a+b)
         |""".stripMargin
 
-    val tokens = lexer.tokenize(code)
-    val parser = new AASTParser(tokens)
+    val tokens = lexer.tokenize(code).filter(t => t.code != Code.SPACE)
+    val stream = new TokenStream(tokens)
+    val parser = new AASTParser(stream)
     var expression = parser.parse()
 
 

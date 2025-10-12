@@ -7,9 +7,9 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
 
-
-class ExpressionParser(stream: TokenStream) {
+class ExpressionParser(private val stream: TokenStream) {
 
   def parseExpression(): Expression = parseOr()
 
@@ -111,8 +111,8 @@ class ExpressionParser(stream: TokenStream) {
 
   private def parsePrimary(): Expression = {
     if (!stream.hasNext) throw new InvalidTokenException(null, null)
-    val tok = stream.next()
 
+    val tok = stream.next()
     var expr: Expression = tok.code match {
       case Code.INT_LITERAL => Literal(tok.value)
       case Code.REAL_LITERAL => Literal(tok.value)
@@ -120,20 +120,30 @@ class ExpressionParser(stream: TokenStream) {
       case Code.TRUE => Literal(true)
       case Code.FALSE => Literal(false)
       case Code.IDENTIFIER => Variable(tok.value.toString)
+
       case Code.ROUND_BRACKET_LEFT =>
         val inner = parseExpression()
         stream.expect(Code.ROUND_BRACKET_RIGHT)
         inner
+
       case Code.SQUARE_BRACKET_LEFT =>
         ArrayLiteral(parseArrayElements())
+
       case Code.CURLY_BRACKET_LEFT =>
         val elems = parseTupleElements()
         TupleLiteral(elems.map { case (k, v) => TupleEntry(k, v) })
-      case Code.NONE => Literal(None)
-      case _ => throw new InvalidTokenException(tok, null)
+
+      case Code.FUNC =>
+        parseFunctionLiteral()
+
+      case Code.NONE =>
+        Literal(None)
+
+      case _ =>
+        throw new InvalidTokenException(tok, null)
     }
 
-    // postfix ops (calls, indexing, access)
+    // postfix ops (calls, indexing, field access)
     while (stream.hasNext) {
       stream.current.code match {
         case Code.ROUND_BRACKET_LEFT => expr = parseFunctionCall(expr)
@@ -142,9 +152,11 @@ class ExpressionParser(stream: TokenStream) {
         case _ => return expr
       }
     }
+
     expr
   }
 
+  // ---------- Array / Tuple parsing ----------
   private def parseArrayElements(): List[Expression] = {
     var elements = List.empty[Expression]
     if (stream.hasNext && stream.current.code != Code.SQUARE_BRACKET_RIGHT) {
@@ -181,6 +193,7 @@ class ExpressionParser(stream: TokenStream) {
     } else (None, parseExpression())
   }
 
+  // ---------- Postfix (calls, indexing, field access) ----------
   private def parseFunctionCall(expr: Expression): Expression = {
     stream.next()
     var args = List.empty[Expression]
@@ -209,6 +222,38 @@ class ExpressionParser(stream: TokenStream) {
       case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
       case Code.INT_LITERAL => TupleIndexAccess(expr, fieldTok.value.toString.toInt)
       case _ => throw new InvalidTokenException(fieldTok, null)
+    }
+  }
+
+  private def parseFunctionLiteral(): Expression = {
+    // we've already consumed 'func'
+    var args = List.empty[Variable]
+
+    if (stream.hasNext && stream.current.code == Code.ROUND_BRACKET_LEFT) {
+      stream.next()
+      if (stream.hasNext && stream.current.code == Code.IDENTIFIER) {
+        args ::= Variable(stream.next().value.toString)
+        while (stream.hasNext && stream.current.code == Code.COMMA) {
+          stream.next()
+          args ::= Variable(stream.next().value.toString)
+        }
+      }
+      stream.expect(Code.ROUND_BRACKET_RIGHT)
+    }
+
+    val bodyParser = new AASTParser(stream)
+
+    if (stream.hasNext && stream.current.code == Code.IS) {
+      stream.next()
+      val codeBlock = bodyParser.parseCodeBlock(Set(Code.END))
+      stream.expect(Code.END)
+      FunctionLiteral(args, codeBlock)
+    } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
+      stream.next()
+      val expr = parseExpression()
+      LambdaLiteral(args, expr)
+    } else {
+      throw new InvalidTokenException(stream.current, Code.IS)
     }
   }
 }
