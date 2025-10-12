@@ -15,9 +15,12 @@ class AASTParser(private val stream: TokenStream) {
 
   def parse(): CodeBlock = {
     val stmts = scala.collection.mutable.ListBuffer.empty[Statement]
+    skip(Set(Code.NEWLINE))
     while (stream.hasNext) {
-      skip(Set(Code.NEWLINE, Code.SEMICOLON))
-      if (stream.hasNext) stmts += parseStatement()
+      stmts += parseStatement()
+      if (stream.hasNext && stream.current.code != Code.END)
+        stream.expect(Code.NEWLINE)
+      skip(Set(Code.NEWLINE))
     }
     CodeBlock(stmts.toList)
   }
@@ -25,13 +28,13 @@ class AASTParser(private val stream: TokenStream) {
   def parseStatement(): Statement = {
     if (!stream.hasNext) throw new InvalidTokenException(null, null)
     stream.current.code match {
-      case Code.VAR => parseVariableDeclaration()
-      case Code.IF => parseIfStatement()
-      case Code.PRINT => parsePrintStatement()
-      case Code.LOOP => parseInfiniteLoop()
-      case Code.FOR => parseForLoop()
-      case Code.EXIT => parseExitStatement()
-      case Code.WHILE => parseWhileStatement()
+      case Code.VAR    => parseVariableDeclaration()
+      case Code.IF     => parseIfStatement()
+      case Code.PRINT  => parsePrintStatement()
+      case Code.LOOP   => parseInfiniteLoop()
+      case Code.FOR    => parseForLoop()
+      case Code.EXIT   => parseExitStatement()
+      case Code.WHILE  => parseWhileStatement()
       case Code.RETURN => parseReturnStatement()
       case Code.IDENTIFIER =>
         val expr = exprParser.parseExpression()
@@ -44,14 +47,16 @@ class AASTParser(private val stream: TokenStream) {
     }
   }
 
+  // ---------- return ----------
   private def parseReturnStatement(): ReturnStatement = {
     stream.expect(Code.RETURN)
-    if (!stream.hasNext || Set(Code.NEWLINE, Code.SEMICOLON, Code.END, Code.ELSE).contains(stream.current.code))
+    if (!stream.hasNext || stream.current.code == Code.NEWLINE || stream.current.code == Code.END)
       ReturnStatement(None)
     else
       ReturnStatement(Some(exprParser.parseExpression()))
   }
 
+  // ---------- variable declaration ----------
   private def parseVariableDeclaration(): VariableDeclaration = {
     stream.expect(Code.VAR)
     val id = stream.expect(Code.IDENTIFIER)
@@ -60,6 +65,7 @@ class AASTParser(private val stream: TokenStream) {
     VariableDeclaration(id.value.toString, expr)
   }
 
+  // ---------- assignment ----------
   private def parseAssignment(lhs: Expression): Statement = {
     stream.expect(Code.ASSIGNMENT)
     val valueExpr = exprParser.parseExpression()
@@ -70,22 +76,33 @@ class AASTParser(private val stream: TokenStream) {
     }
   }
 
-  private def parseIfStatement(): IfStatement = {
+  // ---------- if ----------
+  private def parseIfStatement(): Statement = {
     stream.expect(Code.IF)
     val cond = exprParser.parseExpression()
-    if (stream.current.code == Code.THEN) {
-      stream.next()
-      val thenBlock = parseCodeBlock(Set(Code.ELSE, Code.END))
-      val elseBlock =
-        if (stream.hasNext && stream.current.code == Code.ELSE) {
-          stream.next()
-          Some(parseCodeBlock(Set(Code.END)))
-        } else None
-      stream.expect(Code.END)
-      IfStatement(cond, thenBlock, elseBlock)
-    } else throw new InvalidTokenException(stream.current, Code.THEN)
+
+    // Short if form: "if expr => statement"
+    if (stream.hasNext && stream.current.code == Code.LAMBDA) {
+      stream.next() // consume =>
+      val bodyStmt = parseStatement() // no newline required
+      return IfStatement(cond, CodeBlock(List(bodyStmt)), None)
+    }
+
+    // Normal form: "if expr then ... end"
+    stream.expect(Code.THEN)
+    if (stream.current.code == Code.NEWLINE) stream.next()
+    val thenBlock = parseCodeBlock(Set(Code.ELSE, Code.END))
+    val elseBlock =
+      if (stream.hasNext && stream.current.code == Code.ELSE) {
+        stream.next()
+        if (stream.current.code == Code.NEWLINE) stream.next()
+        Some(parseCodeBlock(Set(Code.END)))
+      } else None
+    stream.expect(Code.END)
+    IfStatement(cond, thenBlock, elseBlock)
   }
 
+  // ---------- print ----------
   private def parsePrintStatement(): PrintStatement = {
     stream.expect(Code.PRINT)
     val exprs = scala.collection.mutable.ListBuffer(exprParser.parseExpression())
@@ -93,10 +110,10 @@ class AASTParser(private val stream: TokenStream) {
       stream.next()
       exprs += exprParser.parseExpression()
     }
-    stream.skipIf(Code.NEWLINE)
     PrintStatement(exprs.toList)
   }
 
+  // ---------- loops ----------
   private def parseForLoop(): Loop = {
     stream.expect(Code.FOR)
     if (stream.peek().exists(_.code == Code.IDENTIFIER) && stream.peek(1).exists(_.code == Code.IN)) {
@@ -131,6 +148,7 @@ class AASTParser(private val stream: TokenStream) {
 
   private def parseInfiniteLoop(): Loop = {
     stream.expect(Code.LOOP)
+    if (stream.current.code == Code.NEWLINE) stream.next()
     val body = parseCodeBlock(Set(Code.END))
     stream.expect(Code.END)
     new Loop(body)
@@ -141,9 +159,11 @@ class AASTParser(private val stream: TokenStream) {
     ExitStatement()
   }
 
+  // ---------- function body ----------
   def parseFunctionBody(): CodeBlock = {
     if (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
+      if (stream.current.code == Code.NEWLINE) stream.next()
       val codeBlock = parseCodeBlock(Set(Code.END))
       stream.expect(Code.END)
       codeBlock
@@ -156,12 +176,15 @@ class AASTParser(private val stream: TokenStream) {
     }
   }
 
+  // ---------- generic code block ----------
   def parseCodeBlock(until: Set[Code]): CodeBlock = {
     val stmts = scala.collection.mutable.ListBuffer.empty[Statement]
+    skip(Set(Code.NEWLINE))
     while (stream.hasNext && !until.contains(stream.current.code)) {
-      skip(Set(Code.NEWLINE, Code.SEMICOLON))
-      if (stream.hasNext && !until.contains(stream.current.code))
-        stmts += parseStatement()
+      stmts += parseStatement()
+      if (stream.hasNext && stream.current.code != Code.END && !until.contains(stream.current.code))
+        stream.expect(Code.NEWLINE)
+      skip(Set(Code.NEWLINE))
     }
     CodeBlock(stmts.toList)
   }
