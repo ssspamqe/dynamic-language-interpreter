@@ -2,7 +2,7 @@ package ru.innopolis.interpreter
 
 import org.scalatest.funsuite.AnyFunSuite
 import ru.innopolis.interpreter.lexer.{Code, Span, Token}
-import ru.innopolis.interpreter.syntax.analyzer.parser.ExpressionParser
+import ru.innopolis.interpreter.syntax.analyzer.parser.{ExpressionParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
@@ -12,7 +12,6 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, Print
 
 class ExpressionParserTest extends AnyFunSuite {
 
-  private val parser = new ExpressionParser
   private val dummySpan = Span(0, 0, 0)
 
   // Helper method to create tokens
@@ -22,7 +21,8 @@ class ExpressionParserTest extends AnyFunSuite {
 
   // Helper method to parse expression from tokens
   private def parse(tokens: List[Token[_]]): Expression = {
-    parser.parseExpression(tokens.iterator.buffered)
+    val parser = new ExpressionParser(new TokenStream(tokens))
+    parser.parseExpression()
   }
 
   test("parse integer literal") {
@@ -529,7 +529,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing parenthesis
     )
-    assertThrows[java.util.NoSuchElementException] {
+    assertThrows[java.lang.IndexOutOfBoundsException] {
       parse(tokens)
     }
   }
@@ -540,7 +540,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing bracket
     )
-    assertThrows[java.util.NoSuchElementException] {
+    assertThrows[java.lang.IndexOutOfBoundsException] {
       parse(tokens)
     }
   }
@@ -551,7 +551,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing brace
     )
-    assertThrows[java.util.NoSuchElementException] {
+    assertThrows[java.lang.IndexOutOfBoundsException] {
       parse(tokens)
     }
   }
@@ -563,7 +563,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing parenthesis
     )
-    assertThrows[java.util.NoSuchElementException] {
+    assertThrows[java.lang.IndexOutOfBoundsException] {
       parse(tokens)
     }
   }
@@ -575,7 +575,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 0L)
       // Missing closing bracket
     )
-    assertThrows[java.util.NoSuchElementException] {
+    assertThrows[java.lang.IndexOutOfBoundsException] {
       parse(tokens)
     }
   }
@@ -733,9 +733,9 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.IDENTIFIER, "y")
     )
     val result = parse(tokens)
-    val expected = FunctionLiteral(
+    val expected = LambdaLiteral(
       args = List(Variable("x"), Variable("y")),
-      body = Left(Binary(Code.PLUS, Variable("x"), Variable("y")))
+      body = Binary(Code.PLUS, Variable("x"), Variable("y"))
     )
     assert(result == expected)
   }
@@ -754,11 +754,11 @@ class ExpressionParserTest extends AnyFunSuite {
     val result = parse(tokens)
     val expected = FunctionLiteral(
       args = List(),
-      body = Right(CodeBlock(
+      body = CodeBlock(
         List(
           PrintStatement(List(Literal(1L)))
         )
-      ))
+      )
     )
     assert(result == expected)
   }
@@ -771,9 +771,9 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
     )
     val result = parse(tokens)
-    val expected = FunctionLiteral(
+    val expected = LambdaLiteral(
       List(),
-      Left(Literal(1L)),
+      Literal(1L)
     )
     assert(result == expected)
   }
@@ -794,9 +794,9 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.ROUND_BRACKET_RIGHT)
     )
     val result = parse(tokens)
-    val innerFunc = FunctionLiteral(
+    val innerFunc = LambdaLiteral(
       args = List(Variable("x")),
-      body = Left(Binary(Code.PLUS, Variable("x"), Literal(1L))),
+      body = Binary(Code.PLUS, Variable("x"), Literal(1L))
     )
     val expected = FunctionCall(Variable("func"), List(innerFunc))
     assert(result == expected)
@@ -834,9 +834,931 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.ROUND_BRACKET_RIGHT)
       // missing => or is ... end
     )
-    assertThrows[java.util.NoSuchElementException] {
+    assertThrows[java.lang.IndexOutOfBoundsException] {
       parse(tokens)
     }
+  }
+
+  // ========== ADVANCED FUNCTION PARSING TESTS ==========
+
+  test("parse complex lambda with nested expressions") {
+    // func(x, y, z) => (x + y) * z - 1
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "z"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "z"),
+      token(Code.MINUS),
+      token(Code.INT_LITERAL, 1L)
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("x"), Variable("y"), Variable("z")),
+      body = Binary(Code.MINUS,
+        Binary(Code.MULTIPLICATION,
+          Binary(Code.PLUS, Variable("x"), Variable("y")),
+          Variable("z")
+        ),
+        Literal(1L)
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with type checking") {
+    // func(x) => x is int and x > 0
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.IS),
+      token(Code.INT),
+      token(Code.AND),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MORE),
+      token(Code.INT_LITERAL, 0L)
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("x")),
+      body = Binary(Code.AND,
+        TypeCheck(Variable("x"), TypeIndicator.IntType),
+        Binary(Code.MORE, Variable("x"), Literal(0L))
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with array operations") {
+    // func(arr, idx) => arr[idx] + arr[idx + 1]
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "idx"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "idx"),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "idx"),
+      token(Code.PLUS),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.SQUARE_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("arr"), Variable("idx")),
+      body = Binary(Code.PLUS,
+        ArrayAccess(Variable("arr"), Variable("idx")),
+        ArrayAccess(Variable("arr"), Binary(Code.PLUS, Variable("idx"), Literal(1L)))
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with tuple operations") {
+    // func(tuple) => tuple.field1 + tuple.field2
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "field1"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "field2")
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("tuple")),
+      body = Binary(Code.PLUS,
+        TupleFieldAccess(Variable("tuple"), "field1"),
+        TupleFieldAccess(Variable("tuple"), "field2")
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with function calls") {
+    // func(x, f) => f(x) + f(x * 2)
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MULTIPLICATION),
+      token(Code.INT_LITERAL, 2L),
+      token(Code.ROUND_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("x"), Variable("f")),
+      body = Binary(Code.PLUS,
+        FunctionCall(Variable("f"), List(Variable("x"))),
+        FunctionCall(Variable("f"), List(Binary(Code.MULTIPLICATION, Variable("x"), Literal(2L))))
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse complex function with block body") {
+    // func(x, y) is
+    //   print x + y
+    //   print x * y
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("x"), Variable("y")),
+      body = CodeBlock(List(
+        PrintStatement(List(Binary(Code.PLUS, Variable("x"), Variable("y")))),
+        PrintStatement(List(Binary(Code.MULTIPLICATION, Variable("x"), Variable("y"))))
+      ))
+    )
+    assert(result == expected)
+  }
+
+  test("parse higher-order function with lambda argument") {
+    // map(func(x) => x * 2, [1, 2, 3])
+    val tokens = List(
+      token(Code.IDENTIFIER, "map"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MULTIPLICATION),
+      token(Code.INT_LITERAL, 2L),
+      token(Code.COMMA),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.COMMA),
+      token(Code.INT_LITERAL, 2L),
+      token(Code.COMMA),
+      token(Code.INT_LITERAL, 3L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.ROUND_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = FunctionCall(
+      Variable("map"),
+      List(
+        LambdaLiteral(
+          args = List(Variable("x")),
+          body = Binary(Code.MULTIPLICATION, Variable("x"), Literal(2L))
+        ),
+        ArrayLiteral(List(Literal(1L), Literal(2L), Literal(3L)))
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse nested function calls with lambdas") {
+    // filter(func(x) => x > 0, map(func(y) => y * 2, arr))
+    val tokens = List(
+      token(Code.IDENTIFIER, "filter"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MORE),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "map"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.MULTIPLICATION),
+      token(Code.INT_LITERAL, 2L),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.ROUND_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = FunctionCall(
+      Variable("filter"),
+      List(
+        LambdaLiteral(
+          args = List(Variable("x")),
+          body = Binary(Code.MORE, Variable("x"), Literal(0L))
+        ),
+        FunctionCall(
+          Variable("map"),
+          List(
+            LambdaLiteral(
+              args = List(Variable("y")),
+              body = Binary(Code.MULTIPLICATION, Variable("y"), Literal(2L))
+            ),
+            Variable("arr")
+          )
+        )
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with complex boolean logic") {
+    // func(x, y) => (x is int and x > 0) or (y is string and y != "")
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.IS),
+      token(Code.INT),
+      token(Code.AND),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MORE),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.OR),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.IS),
+      token(Code.STRING),
+      token(Code.AND),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.NOT_EQUAL),
+      token(Code.STRING_LITERAL, ""),
+      token(Code.ROUND_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("x"), Variable("y")),
+      body = Binary(Code.OR,
+        Binary(Code.AND,
+          TypeCheck(Variable("x"), TypeIndicator.IntType),
+          Binary(Code.MORE, Variable("x"), Literal(0L))
+        ),
+        Binary(Code.AND,
+          TypeCheck(Variable("y"), TypeIndicator.StringType),
+          Binary(Code.NOT_EQUAL, Variable("y"), Literal(""))
+        )
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with tuple creation and access") {
+    // func(x, y) => {name := x, value := y}.name
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.CURLY_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "name"),
+      token(Code.ASSIGNMENT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "value"),
+      token(Code.ASSIGNMENT),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.CURLY_BRACKET_RIGHT),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "name")
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("x"), Variable("y")),
+      body = TupleFieldAccess(
+        TupleLiteral(List(
+          TupleEntry(Some("name"), Variable("x")),
+          TupleEntry(Some("value"), Variable("y"))
+        )),
+        "name"
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with array comprehension-like logic") {
+    // func(arr, predicate) => arr[0] if predicate(arr[0]) else arr[1]
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "predicate"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.AND),
+      token(Code.IDENTIFIER, "predicate"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.OR),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.SQUARE_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("arr"), Variable("predicate")),
+      body = Binary(Code.OR,
+        Binary(Code.AND,
+          ArrayAccess(Variable("arr"), Literal(0L)),
+          FunctionCall(Variable("predicate"), List(ArrayAccess(Variable("arr"), Literal(0L))))
+        ),
+        ArrayAccess(Variable("arr"), Literal(1L))
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse function with multiple nested function calls") {
+    // compose(func(x) => x + 1, func(y) => y * 2, 5)
+    val tokens = List(
+      token(Code.IDENTIFIER, "compose"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.COMMA),
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.MULTIPLICATION),
+      token(Code.INT_LITERAL, 2L),
+      token(Code.COMMA),
+      token(Code.INT_LITERAL, 5L),
+      token(Code.ROUND_BRACKET_RIGHT)
+    )
+    val result = parse(tokens)
+    val expected = FunctionCall(
+      Variable("compose"),
+      List(
+        LambdaLiteral(
+          args = List(Variable("x")),
+          body = Binary(Code.PLUS, Variable("x"), Literal(1L))
+        ),
+        LambdaLiteral(
+          args = List(Variable("y")),
+          body = Binary(Code.MULTIPLICATION, Variable("y"), Literal(2L))
+        ),
+        Literal(5L)
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with complex mathematical expression") {
+    // func(a, b, c) => (a^a + b*b) + c
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "a"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "c"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "a"),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "a"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "c")
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("a"), Variable("b"), Variable("c")),
+      body = Binary(Code.PLUS,
+        Binary(Code.PLUS,
+          Binary(Code.MULTIPLICATION, Variable("a"), Variable("a")),
+          Binary(Code.MULTIPLICATION, Variable("b"), Variable("b"))
+        ),
+        Variable("c")
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with string operations") {
+    // func(s1, s2) => s1 + " " + s2
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "s1"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "s2"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "s1"),
+      token(Code.PLUS),
+      token(Code.STRING_LITERAL, " "),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "s2")
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("s1"), Variable("s2")),
+      body = Binary(Code.PLUS,
+        Binary(Code.PLUS, Variable("s1"), Literal(" ")),
+        Variable("s2")
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse lambda with complex conditional logic") {
+    // func(x, y, z) => x > y and x > z or y > z
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "z"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.LAMBDA),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MORE),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.AND),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MORE),
+      token(Code.IDENTIFIER, "z"),
+      token(Code.OR),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.MORE),
+      token(Code.IDENTIFIER, "z")
+    )
+    val result = parse(tokens)
+    val expected = LambdaLiteral(
+      args = List(Variable("x"), Variable("y"), Variable("z")),
+      body = Binary(Code.OR,
+        Binary(Code.AND,
+          Binary(Code.MORE, Variable("x"), Variable("y")),
+          Binary(Code.MORE, Variable("x"), Variable("z"))
+        ),
+        Binary(Code.MORE, Variable("y"), Variable("z"))
+      )
+    )
+    assert(result == expected)
+  }
+
+  test("parse function with multi-line block body") {
+    // func(x, y) is
+    //   print x + y
+    //   print x * y
+    //   print x - y
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MINUS),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("x"), Variable("y")),
+      body = CodeBlock(List(
+        PrintStatement(List(Binary(Code.PLUS, Variable("x"), Variable("y")))),
+        PrintStatement(List(Binary(Code.MULTIPLICATION, Variable("x"), Variable("y")))),
+        PrintStatement(List(Binary(Code.MINUS, Variable("x"), Variable("y"))))
+      ))
+    )
+    assert(result == expected)
+  }
+
+  test("parse function with complex multi-line calculations") {
+    // func(a, b, c) is
+    //   print a + b
+    //   print b * c
+    //   print (a + b) * c
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "a"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "c"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "a"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "c"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "a"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.MULTIPLICATION),
+      token(Code.IDENTIFIER, "c"),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("a"), Variable("b"), Variable("c")),
+      body = CodeBlock(List(
+        PrintStatement(List(Binary(Code.PLUS, Variable("a"), Variable("b")))),
+        PrintStatement(List(Binary(Code.MULTIPLICATION, Variable("b"), Variable("c")))),
+        PrintStatement(List(Binary(Code.MULTIPLICATION,
+          Binary(Code.PLUS, Variable("a"), Variable("b")),
+          Variable("c")
+        )))
+      ))
+    )
+    assert(result == expected)
+  }
+
+  test("parse function with array operations on multiple lines") {
+    // func(arr) is
+    //   print arr[0]
+    //   print arr[1]
+    //   print arr[0] + arr[1]
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("arr")),
+      body = CodeBlock(List(
+        PrintStatement(List(ArrayAccess(Variable("arr"), Literal(0L)))),
+        PrintStatement(List(ArrayAccess(Variable("arr"), Literal(1L)))),
+        PrintStatement(List(Binary(Code.PLUS,
+          ArrayAccess(Variable("arr"), Literal(0L)),
+          ArrayAccess(Variable("arr"), Literal(1L))
+        )))
+      )
+      ))
+    assert(result == expected)
+  }
+
+  test("parse function with tuple operations on multiple lines") {
+    // func(tuple) is
+    //   print tuple.name
+    //   print tuple.value
+    //   print tuple.name + tuple.value
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "name"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "value"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "name"),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "tuple"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "value"),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("tuple")),
+      body = CodeBlock(List(
+        PrintStatement(List(TupleFieldAccess(Variable("tuple"), "name"))),
+        PrintStatement(List(TupleFieldAccess(Variable("tuple"), "value"))),
+        PrintStatement(List(Binary(Code.PLUS,
+          TupleFieldAccess(Variable("tuple"), "name"),
+          TupleFieldAccess(Variable("tuple"), "value")
+        )))
+      )
+      ))
+    assert(result == expected)
+  }
+
+  test("parse function with function calls on multiple lines") {
+    // func(x, f) is
+    //   print f(x)
+    //   print f(x + 1)
+    //   print f(x * 2)
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.INT_LITERAL, 1L),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "f"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MULTIPLICATION),
+      token(Code.INT_LITERAL, 2L),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("x"), Variable("f")),
+      body = CodeBlock(List(
+        PrintStatement(List(FunctionCall(Variable("f"), List(Variable("x"))))),
+        PrintStatement(List(FunctionCall(Variable("f"), List(Binary(Code.PLUS, Variable("x"), Literal(1L)))))),
+        PrintStatement(List(FunctionCall(Variable("f"), List(Binary(Code.MULTIPLICATION, Variable("x"), Literal(2L))))))
+      )
+      ))
+    assert(result == expected)
+  }
+
+  test("parse function with type checking on multiple lines") {
+    // func(x, y) is
+    //   print x is int
+    //   print y is string
+    //   print x > 0 and y != ""
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.COMMA),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.IS),
+      token(Code.INT),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.IS),
+      token(Code.STRING),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.MORE),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.AND),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.NOT_EQUAL),
+      token(Code.STRING_LITERAL, ""),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("x"), Variable("y")),
+      body = CodeBlock(List(
+        PrintStatement(List(TypeCheck(Variable("x"), TypeIndicator.IntType))),
+        PrintStatement(List(TypeCheck(Variable("y"), TypeIndicator.StringType))),
+        PrintStatement(List(Binary(Code.AND,
+          Binary(Code.MORE, Variable("x"), Literal(0L)),
+          Binary(Code.NOT_EQUAL, Variable("y"), Literal(""))
+        )))
+      )
+      ))
+    assert(result == expected)
+  }
+
+  test("parse function with mixed operations on multiple lines") {
+    // func(data) is
+    //   print data[0]
+    //   print data.field
+    //   print data[0] + data.field
+    //   print data.func(data[0])
+    // end
+    val tokens = List(
+      token(Code.FUNC),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.IS),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "field"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.PLUS),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "field"),
+      token(Code.NEWLINE),
+      token(Code.PRINT),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.DOT),
+      token(Code.IDENTIFIER, "func"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.IDENTIFIER, "data"),
+      token(Code.SQUARE_BRACKET_LEFT),
+      token(Code.INT_LITERAL, 0L),
+      token(Code.SQUARE_BRACKET_RIGHT),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.END)
+    )
+    val result = parse(tokens)
+    val expected = FunctionLiteral(
+      args = List(Variable("data")),
+      body = CodeBlock(List(
+        PrintStatement(List(ArrayAccess(Variable("data"), Literal(0L)))),
+        PrintStatement(List(TupleFieldAccess(Variable("data"), "field"))),
+        PrintStatement(List(Binary(Code.PLUS,
+          ArrayAccess(Variable("data"), Literal(0L)),
+          TupleFieldAccess(Variable("data"), "field")
+        ))),
+        PrintStatement(List(FunctionCall(
+          TupleFieldAccess(Variable("data"), "func"),
+          List(ArrayAccess(Variable("data"), Literal(0L)))
+        )))
+      )
+      ))
+    assert(result == expected)
   }
 
 

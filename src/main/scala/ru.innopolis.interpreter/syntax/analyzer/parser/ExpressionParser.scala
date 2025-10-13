@@ -247,11 +247,11 @@ class ExpressionParser(private val stream: TokenStream) {
       stream.next()
       val codeBlock = bodyParser.parseCodeBlock(Set(Code.END))
       stream.expect(Code.END)
-      FunctionLiteral(args, codeBlock)
+      FunctionLiteral(args.reverse, codeBlock)
     } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
       stream.next()
       val expr = parseExpression()
-      LambdaLiteral(args, expr)
+      LambdaLiteral(args.reverse, expr)
     } else {
       throw new InvalidTokenException(stream.current, Code.IS)
     }
