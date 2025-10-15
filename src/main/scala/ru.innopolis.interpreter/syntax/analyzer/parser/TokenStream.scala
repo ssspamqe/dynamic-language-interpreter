@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 import ru.innopolis.interpreter.lexer.Token
-import ru.innopolis.interpreter.exception.InvalidTokenException
+import ru.innopolis.interpreter.exception.UnexpectedTokenException
 import ru.innopolis.interpreter.lexer.Code
 
 class TokenStream(tokens: List[Token[_]]) {
@@ -22,7 +22,7 @@ class TokenStream(tokens: List[Token[_]]) {
   def expect(code: Code): Token[_] = {
     val t = next()
     if (t.code != code)
-      throw new InvalidTokenException(t, code)
+      throw new UnexpectedTokenException(t, code)
     t
   }
 

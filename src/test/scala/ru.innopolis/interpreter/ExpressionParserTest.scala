@@ -511,14 +511,14 @@ class ExpressionParserTest extends AnyFunSuite {
 
   test("parse empty input throws exception") {
     val tokens = List.empty
-    assertThrows[ru.innopolis.interpreter.exception.InvalidTokenException] {
+    assertThrows[ru.innopolis.interpreter.exception.UnexpectedTokenException] {
       parse(tokens)
     }
   }
 
   test("parse invalid token throws exception") {
     val tokens = List(token(Code.IF)) // IF is not a valid expression token
-    assertThrows[ru.innopolis.interpreter.exception.InvalidTokenException] {
+    assertThrows[ru.innopolis.interpreter.exception.UnexpectedTokenException] {
       parse(tokens)
     }
   }
@@ -586,7 +586,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.DOT),
       token(Code.STRING_LITERAL, "invalid") // String literal not allowed as field
     )
-    assertThrows[ru.innopolis.interpreter.exception.InvalidTokenException] {
+    assertThrows[ru.innopolis.interpreter.exception.UnexpectedTokenException] {
       parse(tokens)
     }
   }

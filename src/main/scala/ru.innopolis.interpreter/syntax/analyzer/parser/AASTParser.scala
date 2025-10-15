@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
-import ru.innopolis.interpreter.exception.InvalidTokenException
+import ru.innopolis.interpreter.exception.UnexpectedTokenException
 import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
@@ -26,7 +26,7 @@ class AASTParser(private val stream: TokenStream) {
   }
 
   def parseStatement(): Statement = {
-    if (!stream.hasNext) throw new InvalidTokenException(null, null)
+    if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
     stream.current.code match {
       case Code.VAR    => parseVariableDeclaration()
       case Code.IF     => parseIfStatement()
@@ -72,7 +72,7 @@ class AASTParser(private val stream: TokenStream) {
     lhs match {
       case Variable(name) => VariableAssignment(name, valueExpr)
       case ArrayAccess(target, index) => ArrayElementAssignment(target, index, valueExpr)
-      case _ => throw new InvalidTokenException(stream.current, Code.ASSIGNMENT)
+      case _ => throw new UnexpectedTokenException(stream.current, Code.ASSIGNMENT)
     }
   }
 
@@ -172,7 +172,7 @@ class AASTParser(private val stream: TokenStream) {
       val expr = exprParser.parseExpression()
       CodeBlock(List(ExpressionStatement(expr)))
     } else {
-      throw new InvalidTokenException(stream.current, Code.IS)
+      throw new UnexpectedTokenException(stream.current, Code.IS)
     }
   }
 

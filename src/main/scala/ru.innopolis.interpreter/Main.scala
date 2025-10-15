@@ -27,10 +27,9 @@ object Main {
         |end
         |var array := [1,2,3,4,5]
         |var sum := 0
-        |for i in array loop
-        | sum := sum+i
-        |end
+        |for i in array loop sum := sum+i a+1 end
         |var a := b is func
+        |var a := 10
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)

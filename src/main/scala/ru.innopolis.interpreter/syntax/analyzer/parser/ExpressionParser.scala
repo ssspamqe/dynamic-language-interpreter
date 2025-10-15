@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
-import ru.innopolis.interpreter.exception.InvalidTokenException
+import ru.innopolis.interpreter.exception.UnexpectedTokenException
 import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
@@ -102,7 +102,7 @@ class ExpressionParser(private val stream: TokenStream) {
 
   private def parseTypeIndicator(): TypeIndicator = {
     if (!stream.hasNext)
-      throw new InvalidTokenException(null, null)
+      throw new UnexpectedTokenException(null, null)
 
     val tok = stream.current
 
@@ -131,12 +131,12 @@ class ExpressionParser(private val stream: TokenStream) {
         TypeIndicator.FuncType
 
       case _ =>
-        throw new InvalidTokenException(tok, null)
+        throw new UnexpectedTokenException(tok, null)
     }
   }
 
   private def parsePrimary(): Expression = {
-    if (!stream.hasNext) throw new InvalidTokenException(null, null)
+    if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
 
     val tok = stream.next()
     var expr: Expression = tok.code match {
@@ -166,7 +166,7 @@ class ExpressionParser(private val stream: TokenStream) {
         Literal(None)
 
       case _ =>
-        throw new InvalidTokenException(tok, null)
+        throw new UnexpectedTokenException(tok, null)
     }
 
     while (stream.hasNext) {
@@ -244,7 +244,7 @@ class ExpressionParser(private val stream: TokenStream) {
     fieldTok.code match {
       case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
       case Code.INT_LITERAL => TupleIndexAccess(expr, fieldTok.value.toString.toInt)
-      case _ => throw new InvalidTokenException(fieldTok, null)
+      case _ => throw new UnexpectedTokenException(fieldTok, null)
     }
   }
 
@@ -275,7 +275,7 @@ class ExpressionParser(private val stream: TokenStream) {
       val expr = parseExpression()
       LambdaLiteral(args.reverse, expr)
     } else {
-      throw new InvalidTokenException(stream.current, Code.IS)
+      throw new UnexpectedTokenException(stream.current, Code.IS)
     }
   }
 }
