@@ -7,7 +7,6 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
 
 class ExpressionParser(private val stream: TokenStream) {
 
@@ -95,18 +94,45 @@ class ExpressionParser(private val stream: TokenStream) {
     var expr = parsePrimary()
     while (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
-      val typeToken = stream.next()
-      val typeIndicator = typeToken.code match {
-        case Code.INT => TypeIndicator.IntType
-        case Code.REAL => TypeIndicator.RealType
-        case Code.BOOL => TypeIndicator.BoolType
-        case Code.STRING => TypeIndicator.StringType
-        case Code.NONE => TypeIndicator.NoneType
-        case _ => throw new InvalidTokenException(typeToken, null)
-      }
-      expr = TypeCheck(expr, typeIndicator)
+      val indicator = parseTypeIndicator()
+      expr = TypeCheck(expr, indicator)
     }
     expr
+  }
+
+  private def parseTypeIndicator(): TypeIndicator = {
+    if (!stream.hasNext)
+      throw new InvalidTokenException(null, null)
+
+    val tok = stream.current
+
+    tok.code match {
+      case Code.INT => stream.next(); TypeIndicator.IntType
+      case Code.REAL => stream.next(); TypeIndicator.RealType
+      case Code.BOOL => stream.next(); TypeIndicator.BoolType
+      case Code.STRING => stream.next(); TypeIndicator.StringType
+      case Code.NONE => stream.next(); TypeIndicator.NoneType
+
+      // array type check: []
+      case Code.SQUARE_BRACKET_LEFT =>
+        stream.next()
+        stream.expect(Code.SQUARE_BRACKET_RIGHT)
+        TypeIndicator.ArrayType
+
+      // tuple type check: {}
+      case Code.CURLY_BRACKET_LEFT =>
+        stream.next()
+        stream.expect(Code.CURLY_BRACKET_RIGHT)
+        TypeIndicator.TupleType
+
+      // func type check: func
+      case Code.FUNC =>
+        stream.next()
+        TypeIndicator.FuncType
+
+      case _ =>
+        throw new InvalidTokenException(tok, null)
+    }
   }
 
   private def parsePrimary(): Expression = {
@@ -143,7 +169,6 @@ class ExpressionParser(private val stream: TokenStream) {
         throw new InvalidTokenException(tok, null)
     }
 
-    // postfix ops (calls, indexing, field access)
     while (stream.hasNext) {
       stream.current.code match {
         case Code.ROUND_BRACKET_LEFT => expr = parseFunctionCall(expr)
@@ -156,7 +181,6 @@ class ExpressionParser(private val stream: TokenStream) {
     expr
   }
 
-  // ---------- Array / Tuple parsing ----------
   private def parseArrayElements(): List[Expression] = {
     var elements = List.empty[Expression]
     if (stream.hasNext && stream.current.code != Code.SQUARE_BRACKET_RIGHT) {
@@ -193,7 +217,6 @@ class ExpressionParser(private val stream: TokenStream) {
     } else (None, parseExpression())
   }
 
-  // ---------- Postfix (calls, indexing, field access) ----------
   private def parseFunctionCall(expr: Expression): Expression = {
     stream.next()
     var args = List.empty[Expression]
@@ -226,7 +249,6 @@ class ExpressionParser(private val stream: TokenStream) {
   }
 
   private def parseFunctionLiteral(): Expression = {
-    // we've already consumed 'func'
     var args = List.empty[Variable]
 
     if (stream.hasNext && stream.current.code == Code.ROUND_BRACKET_LEFT) {

@@ -30,6 +30,7 @@ object Main {
         |for i in array loop
         | sum := sum+i
         |end
+        |var a := b is func
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)
