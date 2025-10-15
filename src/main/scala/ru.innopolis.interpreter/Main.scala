@@ -16,22 +16,7 @@ object Main {
 //        |""".stripMargin
 
     val code =
-      """var i := 0
-        |loop
-        | print "Hello"
-        | i := i + 1
-        | if i=100 => exit
-        |end
-        |for 1..3 loop
-        | print "Hello"
-        | exit
-        |end
-        |var array := [1,2,3,4,5]
-        |var sum := 0
-        |for i in array loop sum := sum+i end
-        |var a := b is func
-        |var a := 10
-        |var b := func(a,b) is return a+b end
+      """var i := a.1.1
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)

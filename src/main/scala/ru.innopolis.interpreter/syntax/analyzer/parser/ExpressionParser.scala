@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
-import ru.innopolis.interpreter.exception.UnexpectedTokenException
+import ru.innopolis.interpreter.exception.{InvalidTokenException, UnexpectedTokenException}
 import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
@@ -274,7 +274,7 @@ class ExpressionParser(private val stream: TokenStream) {
     fieldTok.code match {
       case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
       case Code.INT_LITERAL => TupleIndexAccess(expr, fieldTok.value.toString.toInt)
-      case _ => throw new UnexpectedTokenException(fieldTok, null)
+      case _ => throw new InvalidTokenException(fieldTok)
     }
   }
 }
