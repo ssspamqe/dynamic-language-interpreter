@@ -136,13 +136,26 @@ class ExpressionParser(private val stream: TokenStream) {
     if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
 
     val tok = stream.next()
+    val isIdent = tok.code == Code.IDENTIFIER
     var expr: Expression = tok.code match {
-      case Code.INT_LITERAL => Literal(tok.value)
       case Code.REAL_LITERAL => Literal(tok.value)
       case Code.STRING_LITERAL => Literal(tok.value)
       case Code.TRUE => Literal(true)
       case Code.FALSE => Literal(false)
       case Code.IDENTIFIER => Variable(tok.value.toString)
+      case Code.INT_LITERAL =>
+        // Merge INT DOT INT into real literal if next token is DOT followed by INT
+        if (stream.hasNext && stream.current.code == Code.DOT) {
+          stream.peek(1) match {
+            case Some(nextTok) if nextTok.code == Code.INT_LITERAL =>
+              // merge into real literal
+              stream.next() // consume DOT
+              val right = stream.next() // consume second INT
+              Literal(s"${tok.value}.${right.value}".toDouble)
+            case _ => Literal(tok.value)
+          }
+        } else Literal(tok.value)
+
 
       case Code.ROUND_BRACKET_LEFT =>
         val inner = parseExpression()
@@ -159,24 +172,27 @@ class ExpressionParser(private val stream: TokenStream) {
       case Code.FUNC =>
         parseFunctionLiteral()
 
-      case Code.NONE =>
-        Literal(None)
-
       case _ =>
         throw new UnexpectedTokenException(tok, null)
     }
 
-    while (stream.hasNext) {
-      stream.current.code match {
-        case Code.ROUND_BRACKET_LEFT => expr = parseFunctionCall(expr)
-        case Code.SQUARE_BRACKET_LEFT => expr = parseArrayAccess(expr)
-        case Code.DOT => expr = parseDotAccess(expr)
-        case _ => return expr
+    // Handle function call, array access, tuple field access
+    if(isIdent){
+      while (stream.hasNext) {
+        stream.current.code match {
+          case Code.ROUND_BRACKET_LEFT => expr = parseFunctionCall(expr)
+          case Code.SQUARE_BRACKET_LEFT => expr = parseArrayAccess(expr)
+          case Code.DOT => expr = parseDotAccess(expr)
+          case _ => return expr
+        }
       }
     }
 
+
     expr
   }
+
+
 
   // ---------- function literal ----------
   private def parseFunctionLiteral(): Expression = {
@@ -269,7 +285,7 @@ class ExpressionParser(private val stream: TokenStream) {
   }
 
   private def parseDotAccess(expr: Expression): Expression = {
-    stream.next()
+    stream.expect(Code.DOT)
     val fieldTok = stream.next()
     fieldTok.code match {
       case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
