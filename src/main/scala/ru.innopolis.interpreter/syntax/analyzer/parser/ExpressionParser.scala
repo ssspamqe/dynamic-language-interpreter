@@ -113,19 +113,16 @@ class ExpressionParser(private val stream: TokenStream) {
       case Code.STRING => stream.next(); TypeIndicator.StringType
       case Code.NONE => stream.next(); TypeIndicator.NoneType
 
-      // array type check: []
       case Code.SQUARE_BRACKET_LEFT =>
         stream.next()
         stream.expect(Code.SQUARE_BRACKET_RIGHT)
         TypeIndicator.ArrayType
 
-      // tuple type check: {}
       case Code.CURLY_BRACKET_LEFT =>
         stream.next()
         stream.expect(Code.CURLY_BRACKET_RIGHT)
         TypeIndicator.TupleType
 
-      // func type check: func
       case Code.FUNC =>
         stream.next()
         TypeIndicator.FuncType
@@ -181,6 +178,39 @@ class ExpressionParser(private val stream: TokenStream) {
     expr
   }
 
+  // ---------- function literal ----------
+  private def parseFunctionLiteral(): Expression = {
+    var args = List.empty[Variable]
+
+    if (stream.hasNext && stream.current.code == Code.ROUND_BRACKET_LEFT) {
+      stream.next()
+      if (stream.hasNext && stream.current.code == Code.IDENTIFIER) {
+        args ::= Variable(stream.next().value.toString)
+        while (stream.hasNext && stream.current.code == Code.COMMA) {
+          stream.next()
+          args ::= Variable(stream.next().value.toString)
+        }
+      }
+      stream.expect(Code.ROUND_BRACKET_RIGHT)
+    }
+
+    val bodyParser = new AASTParser(stream, inFunction = true, inLoop = false)
+
+    if (stream.hasNext && stream.current.code == Code.IS) {
+      stream.next()
+      val codeBlock = bodyParser.parseCodeBlock(Set(Code.END), functionContext = true, loopContext = false)
+      stream.expect(Code.END)
+      FunctionLiteral(args.reverse, codeBlock)
+    } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
+      stream.next()
+      val expr = parseExpression()
+      LambdaLiteral(args.reverse, expr)
+    } else {
+      throw new UnexpectedTokenException(stream.current, Code.IS)
+    }
+  }
+
+  // ---------- array/tuple/function helpers ----------
   private def parseArrayElements(): List[Expression] = {
     var elements = List.empty[Expression]
     if (stream.hasNext && stream.current.code != Code.SQUARE_BRACKET_RIGHT) {
@@ -245,37 +275,6 @@ class ExpressionParser(private val stream: TokenStream) {
       case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
       case Code.INT_LITERAL => TupleIndexAccess(expr, fieldTok.value.toString.toInt)
       case _ => throw new UnexpectedTokenException(fieldTok, null)
-    }
-  }
-
-  private def parseFunctionLiteral(): Expression = {
-    var args = List.empty[Variable]
-
-    if (stream.hasNext && stream.current.code == Code.ROUND_BRACKET_LEFT) {
-      stream.next()
-      if (stream.hasNext && stream.current.code == Code.IDENTIFIER) {
-        args ::= Variable(stream.next().value.toString)
-        while (stream.hasNext && stream.current.code == Code.COMMA) {
-          stream.next()
-          args ::= Variable(stream.next().value.toString)
-        }
-      }
-      stream.expect(Code.ROUND_BRACKET_RIGHT)
-    }
-
-    val bodyParser = new AASTParser(stream)
-
-    if (stream.hasNext && stream.current.code == Code.IS) {
-      stream.next()
-      val codeBlock = bodyParser.parseCodeBlock(Set(Code.END))
-      stream.expect(Code.END)
-      FunctionLiteral(args.reverse, codeBlock)
-    } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
-      stream.next()
-      val expr = parseExpression()
-      LambdaLiteral(args.reverse, expr)
-    } else {
-      throw new UnexpectedTokenException(stream.current, Code.IS)
     }
   }
 }
