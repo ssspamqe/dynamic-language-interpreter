@@ -1,7 +1,13 @@
 var i := 1.2.3
 ---
-var i := 1.2.3
-            ^
-Error on line 1 column 9:
-No such token
-todo handle error sequence
+VAR(var)
+SPACE( )
+IDENTIFIER(i)
+SPACE( )
+ASSIGNMENT(:=)
+SPACE( )
+INT_LITERAL(1)
+DOT(.)
+INT_LITERAL(2)
+DOT(.)
+INT_LITERAL(3)

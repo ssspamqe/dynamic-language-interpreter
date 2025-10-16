@@ -34,7 +34,8 @@ class RegexLexerTest extends AnyFunSuite {
     assert(parts.length == 2, s"File must contain 2 sections: $file")
 
     val code = parts(0)
-    val expectedOutput = parts(1)
+    val expectedOutput = parts(1).replace("\r","")
+
 
     // tokenization
     val tokens: List[Token[_]] = lexer.tokenize(code)
@@ -43,7 +44,6 @@ class RegexLexerTest extends AnyFunSuite {
     val actualTokens = tokens.map(_.toString).mkString("\n")
 
     // Assert tokens
-    assert(actualTokens == expectedOutput,
-      s"File: ${file.getFileName} - tokens did not match")
+    assert(actualTokens == expectedOutput)
   }
 }

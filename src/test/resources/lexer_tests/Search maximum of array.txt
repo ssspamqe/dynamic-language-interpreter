@@ -6,7 +6,7 @@ for x in arr loop
 end
 print max
 ---
-DECLARATION(var)
+VAR(var)
 SPACE( )
 IDENTIFIER(arr)
 SPACE( )
@@ -25,7 +25,7 @@ SPACE( )
 INT_LITERAL(2)
 SQUARE_BRACKET_RIGHT(])
 NEWLINE(\n)
-DECLARATION(var)
+VAR(var)
 SPACE( )
 IDENTIFIER(max)
 SPACE( )
