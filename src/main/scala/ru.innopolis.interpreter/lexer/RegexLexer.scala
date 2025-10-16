@@ -24,7 +24,6 @@ class RegexLexer {
     val identifiers = List(Rule(Code.IDENTIFIER, "[a-zA-Z_][a-zA-Z0-9_]*".r))
 
     val numbers = List(
-      Rule(Code.REAL_LITERAL, ("\\d+\\.\\d+").r),
       Rule(Code.INT_LITERAL, ("\\d+").r)
     )
 
