@@ -16,7 +16,20 @@ object Main {
 //        |""".stripMargin
 
     val code =
-      """var i := a.1.1
+      """var i := 0
+        |loop
+        | print "Hello"
+        | i := i + 1
+        | if i=100 => exit
+        |end
+        |for 1..3 loop
+        | print "Hello"
+        |end
+        |var array := [1,2,3,4,5]
+        |var sum := 0
+        |for i in array loop
+        | sum := sum+i
+        |end
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)
@@ -30,9 +43,30 @@ object Main {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     var expression = parser.parse()
+    printCaseClass(expression)
+    println(expression)
+  }
 
-    for (token <- tokens) {
-      println(s"$token")
+  def printCaseClass(obj: Any, indent: String = ""): Unit = {
+    obj match {
+      case p: Product if p.productPrefix != "Tuple" =>
+        val clsName = p.productPrefix
+        val fields = p.getClass.getDeclaredFields.map(_.getName).zip(p.productIterator.toList)
+
+        println(s"${clsName}(")
+        for (((name, value), idx) <- fields.zipWithIndex) {
+          val isLast = idx == fields.size - 1
+          print(s"${indent} $name = ")
+          value match {
+            case inner: Product if inner.productPrefix != "Tuple" =>
+              printCaseClass(inner, indent + "  ")
+            case other =>
+              println(other.toString)
+          }
+        }
+        println(s"${indent})")
+      case other =>
+        println(s"${indent}${other.toString}")
     }
   }
 }
