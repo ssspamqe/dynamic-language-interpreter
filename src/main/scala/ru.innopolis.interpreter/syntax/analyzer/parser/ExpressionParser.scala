@@ -172,6 +172,9 @@ class ExpressionParser(private val stream: TokenStream) {
       case Code.FUNC =>
         parseFunctionLiteral()
 
+      case Code.NONE =>
+        Literal(None)
+
       case _ =>
         throw new UnexpectedTokenException(tok, null)
     }

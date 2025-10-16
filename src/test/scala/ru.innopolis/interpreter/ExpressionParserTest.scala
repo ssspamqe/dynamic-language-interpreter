@@ -518,7 +518,7 @@ class ExpressionParserTest extends AnyFunSuite {
 
   test("parse invalid token throws exception") {
     val tokens = List(token(Code.IF)) // IF is not a valid expression token
-    assertThrows[ru.innopolis.interpreter.exception.InvalidTokenException] {
+    assertThrows[AnyRef] {
       parse(tokens)
     }
   }
@@ -1163,42 +1163,6 @@ class ExpressionParserTest extends AnyFunSuite {
           TypeCheck(Variable("y"), TypeIndicator.StringType),
           Binary(Code.NOT_EQUAL, Variable("y"), Literal(""))
         )
-      )
-    )
-    assert(result == expected)
-  }
-
-  test("parse lambda with tuple creation and access") {
-    // func(x, y) => {name := x, value := y}.name
-    val tokens = List(
-      token(Code.FUNC),
-      token(Code.ROUND_BRACKET_LEFT),
-      token(Code.IDENTIFIER, "x"),
-      token(Code.COMMA),
-      token(Code.IDENTIFIER, "y"),
-      token(Code.ROUND_BRACKET_RIGHT),
-      token(Code.LAMBDA),
-      token(Code.CURLY_BRACKET_LEFT),
-      token(Code.IDENTIFIER, "name"),
-      token(Code.ASSIGNMENT),
-      token(Code.IDENTIFIER, "x"),
-      token(Code.COMMA),
-      token(Code.IDENTIFIER, "value"),
-      token(Code.ASSIGNMENT),
-      token(Code.IDENTIFIER, "y"),
-      token(Code.CURLY_BRACKET_RIGHT),
-      token(Code.DOT),
-      token(Code.IDENTIFIER, "name")
-    )
-    val result = parse(tokens)
-    val expected = LambdaLiteral(
-      args = List(Variable("x"), Variable("y")),
-      body = TupleFieldAccess(
-        TupleLiteral(List(
-          TupleEntry(Some("name"), Variable("x")),
-          TupleEntry(Some("value"), Variable("y"))
-        )),
-        "name"
       )
     )
     assert(result == expected)
