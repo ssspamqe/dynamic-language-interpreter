@@ -1,7 +1,8 @@
 package ru.innopolis.interpreter.exception
 
-import ru.innopolis.interpreter.lexer.{Code, Token}
+import ru.innopolis.interpreter.lexer.Token
 
-class InvalidTokenException(actualToken:Token[_], expectedCode:Code)
-  extends RuntimeException(f"Token $actualToken is invalid! Expected: $expectedCode"){
+class InvalidTokenException(token:Token[_]) extends TokenException(
+  s"Invalid token: ${token.value} at ${token.span.line}:${token.span.begin}"
+) {
 }

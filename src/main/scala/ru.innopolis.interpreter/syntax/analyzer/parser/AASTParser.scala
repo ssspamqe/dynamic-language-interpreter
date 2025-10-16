@@ -1,105 +1,198 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
-import ru.innopolis.interpreter.exception.InvalidTokenException
-import ru.innopolis.interpreter.lexer.{Code, Token}
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{IfStatement, Statement, CodeBlock}
+import ru.innopolis.interpreter.exception.{InvalidTokenContextException, UnexpectedTokenException}
+import ru.innopolis.interpreter.lexer.Code
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{CollectionLoop, Loop, RangeLoop, WhileLoop}
 
-import scala.collection.BufferedIterator
+class AASTParser(private val stream: TokenStream, private val inFunction: Boolean = false, private val inLoop: Boolean = false) {
 
-class AASTParser {
+  private val exprParser = new ExpressionParser(stream)
 
-  private val expressionParser = new ExpressionParser
-
-  def parse(tokens: List[Token[_]]):CodeBlock = {
-    val tokenIterator = tokens.filter(t => t.code != Code.SPACE).iterator.buffered
-    val topLevelStatements = scala.collection.mutable.ListBuffer.empty[Statement]
-
-    while (tokenIterator.hasNext) {
-      topLevelStatements.addOne(parseStatement(tokenIterator))
+  def parse(): CodeBlock = {
+    val stmts = scala.collection.mutable.ListBuffer.empty[Statement]
+    skip(Set(Code.NEWLINE))
+    while (stream.hasNext) {
+      stmts += parseStatement(inFunction, inLoop)
+      if (stream.hasNext && stream.current.code != Code.END)
+        stream.expect(Code.NEWLINE)
+      skip(Set(Code.NEWLINE))
     }
-
-    CodeBlock(topLevelStatements.toList)
+    CodeBlock(stmts.toList)
   }
 
-
-  private def parseStatement(tokenIterator: BufferedIterator[Token[_]]): Statement = {
-    if (!tokenIterator.hasNext) {
-      throw new InvalidTokenException(null,null);
-    }
-    skipTokens(tokenIterator, Set(Code.NEWLINE, Code.SPACE))
-    tokenIterator.head.code match {
-      case Code.VAR => parseVariableDeclaration(tokenIterator)
-      case Code.IF => parseIfStatement(tokenIterator)
+  def parseStatement(functionContext: Boolean, loopContext: Boolean): Statement = {
+    if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
+    stream.current.code match {
+      case Code.RETURN =>
+        if (!functionContext) throw new InvalidTokenContextException(stream.current)
+        parseReturnStatement()
+      case Code.EXIT =>
+        if (!loopContext) throw new InvalidTokenContextException(stream.current)
+        parseExitStatement()
+      case Code.VAR    => parseVariableDeclaration()
+      case Code.IF     => parseIfStatement(functionContext, loopContext)
+      case Code.PRINT  => parsePrintStatement()
+      case Code.LOOP   => parseInfiniteLoop(functionContext)
+      case Code.FOR    => parseForLoop(functionContext)
+      case Code.WHILE  => parseWhileStatement(functionContext)
+      case Code.IDENTIFIER =>
+        val expr = exprParser.parseExpression()
+        if (stream.hasNext && stream.current.code == Code.ASSIGNMENT)
+          parseAssignment(expr)
+        else ExpressionStatement(expr)
+      case _ =>
+        val expr = exprParser.parseExpression()
+        ExpressionStatement(expr)
     }
   }
 
-  private def parseVariableDeclaration(iterator: BufferedIterator[Token[_]]): VariableDeclaration = {
-    assertTokenCode(iterator.next(), Code.VAR)
-    val identifierToken = iterator.next()
-    assertTokenCode(identifierToken, Code.IDENTIFIER)
-    assertTokenCode(iterator.next(), Code.ASSIGNMENT)
-    val expr = expressionParser.parseExpression(iterator)
-
-    VariableDeclaration(identifierToken.value.toString, expr)
+  // ---------- return ----------
+  private def parseReturnStatement(): ReturnStatement = {
+    stream.expect(Code.RETURN)
+    if (!stream.hasNext || stream.current.code == Code.NEWLINE || stream.current.code == Code.END)
+      ReturnStatement(None)
+    else
+      ReturnStatement(Some(exprParser.parseExpression()))
   }
 
+  // ---------- variable declaration ----------
+  private def parseVariableDeclaration(): VariableDeclaration = {
+    stream.expect(Code.VAR)
+    val id = stream.expect(Code.IDENTIFIER)
+    stream.expect(Code.ASSIGNMENT)
+    val expr = exprParser.parseExpression()
+    VariableDeclaration(id.value.toString, expr)
+  }
 
-  private def parseIfStatement(iterator: BufferedIterator[Token[_]]): IfStatement = {
-    assertTokenCode(iterator.next(), Code.IF) // consume 'if'
-    assertTokenCode(iterator.next(), Code.SPACE) // consume space
-    val condition = expressionParser.parseExpression(iterator)
-    assertTokenCode(iterator.next(), Code.SPACE) // consume space
-    // two possible forms: "then ... end" or "=> ..."
-    if (iterator.hasNext && iterator.head.code == Code.THEN) {
-      iterator.next() // consume 'then'
-      val thenBody = parseCodeBlock(iterator)
+  // ---------- assignment ----------
+  private def parseAssignment(lhs: Expression): Statement = {
+    stream.expect(Code.ASSIGNMENT)
+    val valueExpr = exprParser.parseExpression()
+    lhs match {
+      case Variable(name) => VariableAssignment(name, valueExpr)
+      case ArrayAccess(target, index) => ArrayElementAssignment(target, index, valueExpr)
+      case _ => throw new UnexpectedTokenException(stream.current, Code.ASSIGNMENT)
+    }
+  }
 
-      // optional else
-      var elseBody: Option[CodeBlock] = None
-      if (iterator.hasNext && iterator.head.code == Code.ELSE) {
-        iterator.next() // consume 'else'
-        elseBody = Some(parseCodeBlock(iterator))
+  // ---------- if ----------
+  private def parseIfStatement(functionContext: Boolean, loopContext: Boolean): Statement = {
+    stream.expect(Code.IF)
+    val cond = exprParser.parseExpression()
+
+    // Short if form: "if expr => statement"
+    if (stream.hasNext && stream.current.code == Code.LAMBDA) {
+      stream.next() // consume =>
+      val bodyStmt = parseStatement(functionContext, loopContext)
+      return IfStatement(cond, CodeBlock(List(bodyStmt)), None)
+    }
+
+    // Normal form: "if expr then ... end"
+    stream.expect(Code.THEN)
+    if (stream.current.code == Code.NEWLINE) stream.next()
+    val thenBlock = parseCodeBlock(Set(Code.ELSE, Code.END), functionContext, loopContext)
+    val elseBlock =
+      if (stream.hasNext && stream.current.code == Code.ELSE) {
+        stream.next()
+        if (stream.current.code == Code.NEWLINE) stream.next()
+        Some(parseCodeBlock(Set(Code.END), functionContext, loopContext))
+      } else None
+    stream.expect(Code.END)
+    IfStatement(cond, thenBlock, elseBlock)
+  }
+
+  // ---------- print ----------
+  private def parsePrintStatement(): PrintStatement = {
+    stream.expect(Code.PRINT)
+    val exprs = scala.collection.mutable.ListBuffer(exprParser.parseExpression())
+    while (stream.hasNext && stream.current.code == Code.COMMA) {
+      stream.next()
+      exprs += exprParser.parseExpression()
+    }
+    PrintStatement(exprs.toList)
+  }
+
+  // ---------- loops ----------
+  private def parseForLoop(functionContext: Boolean): Loop = {
+    stream.expect(Code.FOR)
+    if (stream.peek().exists(_.code == Code.IDENTIFIER) && stream.peek(1).exists(_.code == Code.IN)) {
+      val id = stream.expect(Code.IDENTIFIER)
+      stream.expect(Code.IN)
+      val rangeStart = exprParser.parseExpression()
+
+      if (stream.peek().exists(_.code == Code.RANGE)) {
+        stream.expect(Code.RANGE)
+        val rangeEnd = exprParser.parseExpression()
+        val body = parseInfiniteLoop(functionContext)
+        return RangeLoop(Some(id.value.toString), rangeStart, rangeEnd, body.body)
       }
 
-      // must close with 'end'
-      assertTokenCode(iterator.next(), Code.END)
+      val body = parseInfiniteLoop(functionContext)
+      return CollectionLoop(id.value.toString, rangeStart, body.body)
+    }
 
-      IfStatement(condition, thenBody, elseBody)
+    val rangeFrom = exprParser.parseExpression()
+    stream.expect(Code.RANGE)
+    val rangeTo = exprParser.parseExpression()
+    val body = parseInfiniteLoop(functionContext)
+    RangeLoop(None, rangeFrom, rangeTo, body.body)
+  }
 
-    } else if (iterator.hasNext && iterator.head.code == Code.LAMBDA) {
-      // short if: "if expr => Body"
-      iterator.next() // consume "=>"
-      val thenBody = parseCodeBlock(iterator)
-      IfStatement(condition, thenBody, None)
+  private def parseWhileStatement(functionContext: Boolean): WhileLoop = {
+    stream.expect(Code.WHILE)
+    val cond = exprParser.parseExpression()
+    val loop = parseInfiniteLoop(functionContext)
+    WhileLoop(cond, loop.body)
+  }
 
+  private def parseInfiniteLoop(functionContext: Boolean): Loop = {
+    stream.expect(Code.LOOP)
+    if (stream.current.code == Code.NEWLINE) stream.next()
+    val body = parseCodeBlock(Set(Code.END), functionContext, loopContext = true)
+    stream.expect(Code.END)
+    new Loop(body)
+  }
+
+  private def parseExitStatement(): ExitStatement = {
+    stream.expect(Code.EXIT)
+    ExitStatement()
+  }
+
+  // ---------- function body ----------
+  def parseFunctionBody(): CodeBlock = {
+    if (stream.hasNext && stream.current.code == Code.IS) {
+      stream.next()
+      if (stream.current.code == Code.NEWLINE) stream.next()
+      val codeBlock = parseCodeBlock(Set(Code.END), functionContext = true, loopContext = false)
+      stream.expect(Code.END)
+      codeBlock
+    } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
+      stream.next()
+      val expr = exprParser.parseExpression()
+      CodeBlock(List(ExpressionStatement(expr)))
     } else {
-      throw new InvalidTokenException(iterator.head, Code.THEN) // expected THEN or =>
+      throw new UnexpectedTokenException(stream.current, Code.IS)
     }
   }
 
-  private def parseCodeBlock(iterator: BufferedIterator[Token[_]], endTokens: Set[Code] = Set(Code.END)): CodeBlock = {
-    val statements = scala.collection.mutable.ListBuffer.empty[Statement]
-
-    while (iterator.hasNext && !endTokens.contains(iterator.head.code)) {
-      statements.addOne(parseStatement(iterator))
+  // ---------- generic code block ----------
+  def parseCodeBlock(until: Set[Code], functionContext: Boolean, loopContext: Boolean): CodeBlock = {
+    val stmts = scala.collection.mutable.ListBuffer.empty[Statement]
+    skip(Set(Code.NEWLINE))
+    while (stream.hasNext && !until.contains(stream.current.code)) {
+      stmts += parseStatement(functionContext, loopContext)
+      if (stream.hasNext && stream.current.code != Code.END && !until.contains(stream.current.code))
+        stream.expect(Code.NEWLINE)
+      skip(Set(Code.NEWLINE))
     }
-
-    CodeBlock(statements.toList)
+    CodeBlock(stmts.toList)
   }
 
-  private def skipTokens(iterator: BufferedIterator[Token[_]], tokensToSkip:Set[Code]): Unit = {
-    while(iterator.hasNext && tokensToSkip.contains(iterator.head.code)){
-      iterator.next()
-    }
-  }
-
-
-  private def assertTokenCode(actualToken: Token[_], expectedCode: Code): Unit = {
-    if (actualToken.code != expectedCode) {
-      throw new InvalidTokenException(actualToken, expectedCode)
-    }
-  }
-
-
+  private def skip(codes: Set[Code]): Unit =
+    while (stream.hasNext && codes.contains(stream.current.code)) stream.next()
 }

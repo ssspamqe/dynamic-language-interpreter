@@ -3,7 +3,7 @@ package ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Expression
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.CodeBlock
 
-case class CollectionLoop(ident: Option[String],
+case class CollectionLoop(ident: String,
                           collection: Expression,
-                          body: CodeBlock
-                         ) extends ForLoop(ident, body)
+                          override val body: CodeBlock
+                         ) extends Loop(body)
