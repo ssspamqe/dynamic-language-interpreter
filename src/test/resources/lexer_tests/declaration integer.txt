@@ -1,7 +1,7 @@
 // Declaration integer
 var x := 1;
 ---
-DECLARATION(var)
+VAR(var)
 SPACE( )
 IDENTIFIER(x)
 SPACE( )

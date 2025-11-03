@@ -51,7 +51,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     }
   }
 
-  // ---------- return ----------
   private def parseReturnStatement(): ReturnStatement = {
     stream.expect(Code.RETURN)
     if (!stream.hasNext || stream.current.code == Code.NEWLINE || stream.current.code == Code.END)
@@ -60,7 +59,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
       ReturnStatement(Some(exprParser.parseExpression()))
   }
 
-  // ---------- variable declaration ----------
   private def parseVariableDeclaration(): VariableDeclaration = {
     stream.expect(Code.VAR)
     val id = stream.expect(Code.IDENTIFIER)
@@ -69,7 +67,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     VariableDeclaration(id.value.toString, expr)
   }
 
-  // ---------- assignment ----------
   private def parseAssignment(lhs: Expression): Statement = {
     stream.expect(Code.ASSIGNMENT)
     val valueExpr = exprParser.parseExpression()
@@ -80,19 +77,16 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     }
   }
 
-  // ---------- if ----------
   private def parseIfStatement(functionContext: Boolean, loopContext: Boolean): Statement = {
     stream.expect(Code.IF)
     val cond = exprParser.parseExpression()
 
-    // Short if form: "if expr => statement"
     if (stream.hasNext && stream.current.code == Code.LAMBDA) {
-      stream.next() // consume =>
+      stream.next()
       val bodyStmt = parseStatement(functionContext, loopContext)
       return IfStatement(cond, CodeBlock(List(bodyStmt)), None)
     }
 
-    // Normal form: "if expr then ... end"
     stream.expect(Code.THEN)
     if (stream.current.code == Code.NEWLINE) stream.next()
     val thenBlock = parseCodeBlock(Set(Code.ELSE, Code.END), functionContext, loopContext)
@@ -106,7 +100,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     IfStatement(cond, thenBlock, elseBlock)
   }
 
-  // ---------- print ----------
   private def parsePrintStatement(): PrintStatement = {
     stream.expect(Code.PRINT)
     val exprs = scala.collection.mutable.ListBuffer(exprParser.parseExpression())
@@ -117,7 +110,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     PrintStatement(exprs.toList)
   }
 
-  // ---------- loops ----------
   private def parseForLoop(functionContext: Boolean): Loop = {
     stream.expect(Code.FOR)
     if (stream.peek().exists(_.code == Code.IDENTIFIER) && stream.peek(1).exists(_.code == Code.IN)) {
@@ -163,7 +155,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     ExitStatement()
   }
 
-  // ---------- function body ----------
   def parseFunctionBody(): CodeBlock = {
     if (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
@@ -180,7 +171,6 @@ class AASTParser(private val stream: TokenStream, private val inFunction: Boolea
     }
   }
 
-  // ---------- generic code block ----------
   def parseCodeBlock(until: Set[Code], functionContext: Boolean, loopContext: Boolean): CodeBlock = {
     val stmts = scala.collection.mutable.ListBuffer.empty[Statement]
     skip(Set(Code.NEWLINE))

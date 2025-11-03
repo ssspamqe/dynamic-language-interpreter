@@ -7,7 +7,7 @@ while i <= 5 loop
 end
 print sum
 ---
-DECLARATION(var)
+VAR(var)
 SPACE( )
 IDENTIFIER(i)
 SPACE( )
@@ -15,7 +15,7 @@ ASSIGNMENT(:=)
 SPACE( )
 INT_LITERAL(1)
 NEWLINE(\n)
-DECLARATION(var)
+VAR(var)
 SPACE( )
 IDENTIFIER(sum)
 SPACE( )

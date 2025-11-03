@@ -144,13 +144,11 @@ class ExpressionParser(private val stream: TokenStream) {
       case Code.FALSE => Literal(false)
       case Code.IDENTIFIER => Variable(tok.value.toString)
       case Code.INT_LITERAL =>
-        // Merge INT DOT INT into real literal if next token is DOT followed by INT
         if (stream.hasNext && stream.current.code == Code.DOT) {
           stream.peek(1) match {
             case Some(nextTok) if nextTok.code == Code.INT_LITERAL =>
-              // merge into real literal
-              stream.next() // consume DOT
-              val right = stream.next() // consume second INT
+              stream.next()
+              val right = stream.next()
               Literal(s"${tok.value}.${right.value}".toDouble)
             case _ => Literal(tok.value)
           }
@@ -179,7 +177,6 @@ class ExpressionParser(private val stream: TokenStream) {
         throw new UnexpectedTokenException(tok, null)
     }
 
-    // Handle function call, array access, tuple field access
     if(isIdent){
       while (stream.hasNext) {
         stream.current.code match {
@@ -190,14 +187,9 @@ class ExpressionParser(private val stream: TokenStream) {
         }
       }
     }
-
-
     expr
   }
 
-
-
-  // ---------- function literal ----------
   private def parseFunctionLiteral(): Expression = {
     var args = List.empty[Variable]
 
@@ -229,7 +221,6 @@ class ExpressionParser(private val stream: TokenStream) {
     }
   }
 
-  // ---------- array/tuple/function helpers ----------
   private def parseArrayElements(): List[Expression] = {
     var elements = List.empty[Expression]
     if (stream.hasNext && stream.current.code != Code.SQUARE_BRACKET_RIGHT) {
