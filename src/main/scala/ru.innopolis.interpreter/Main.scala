@@ -32,6 +32,8 @@ object Main {
         | sum := sum+i
         | exit
         |end
+        |exit
+        |
         |""".stripMargin
 
     val tokens = lexer.tokenize(code)
