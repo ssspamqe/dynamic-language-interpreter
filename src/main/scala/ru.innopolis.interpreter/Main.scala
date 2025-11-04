@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter
 
-
+import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticAnalyzer
 import ru.innopolis.interpreter.lexer.{Code, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, ExpressionParser, TokenStream}
 
@@ -30,6 +30,7 @@ object Main {
         |var sum := 0
         |for i in array loop
         | sum := sum+i
+        | exit
         |end
         |""".stripMargin
 
@@ -43,9 +44,12 @@ object Main {
 
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
-    var expression = parser.parse()
-    printCaseClass(expression)
-    println(expression)
+    var tree = parser.parse()
+
+    var analyzer =  new SemanticAnalyzer()
+    analyzer.analyze(tree)
+    printCaseClass(tree)
+    println(tree)
   }
 
   def printCaseClass(obj: Any, indent: String = ""): Unit = {
