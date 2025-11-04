@@ -3,6 +3,7 @@ package ru.innopolis.interpreter
 
 import ru.innopolis.interpreter.lexer.{Code, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, ExpressionParser, TokenStream}
+
 object Main {
   def main(args: Array[String]): Unit = {
     val lexer = new RegexLexer()
