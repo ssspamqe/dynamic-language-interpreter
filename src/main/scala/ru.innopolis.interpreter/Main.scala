@@ -15,9 +15,9 @@ object Main {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val expression = parser.parse()
+    val analyzedExpression = SemanticAnalyzer.analyze(expression)
 
-    CaseClassPrinter.printCaseClass(expression)
-    println(expression)
+    CaseClassPrinter.printCaseClass(analyzedExpression)
   }
 
 }

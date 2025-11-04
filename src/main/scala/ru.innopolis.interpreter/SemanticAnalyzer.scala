@@ -1,5 +1,11 @@
 package ru.innopolis.interpreter
 
+import ru.innopolis.interpreter.lexer.Code
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
+
 /*
 The next stage of your project is Semantic Analysis (Analyzer).
 Semantic analysis is an essential step where you check for semantic correctness in your program and perform possible optimizations. This means making sure your program behaves logically and consistently according to the rules of the language.
@@ -66,6 +72,21 @@ Presentation Format
 The format of the presentation is the same as previous ones. You’ll need to upload your presentations to Moodle and demonstrate your work during the lab session. Each team will have 10 minutes for the presentation.
  */
 
-class SemanticAnalyzer {
+object SemanticAnalyzer {
 
+  def analyze(expression: CodeBlock): CodeBlock = {
+
+    checkAst(expression)
+    val optimizedExpression = optimizeAst(expression)
+
+    optimizedExpression
+  }
+
+  private def optimizeAst(e: CodeBlock): CodeBlock = {
+    e
+  }
+
+  private def checkAst(e: CodeBlock): Unit = {
+
+  }
 }
