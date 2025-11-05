@@ -1,77 +1,133 @@
 package ru.innopolis.interpreter.analyzer.semantic.optimization
 
+import ru.innopolis.interpreter.lexer._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.FunctionCall
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
 
 /*
-The next stage of your project is Semantic Analysis (Analyzer).
-Semantic analysis is an essential step where you check for semantic correctness in your program and perform possible optimizations. This means making sure your program behaves logically and consistently according to the rules of the language.
-
-You will present your semantic analyzer on next Thursday, November 6
-
-Important Requirement
-For this stage, we expect at least two checks that do not modify the AST and at least two optimizations that do modify the AST. You can choose from the examples below or come up with your own, but make sure to meet this minimum requirement. Also, try to implement as many as possible.
-
-Semantic Analysis Checks
-Here are some typical checks you might want to implement (note: these checks will not modify the AST):
-1. Correct Keyword Usage: Ensure that keywords are used in the right context. For instance, the break keyword should only appear inside loops, and return should only be used inside functions.
-2. Declarations Before Usage: Make sure that all classes, functions, and variables are declared (and possibly initialized) before they are used. For example, if you're calling a function, ensure that the function actually exists.
-3. Type Checking: Implement partial type checking to ensure, for example, that return values match the declared function types and that the types align when assigning variables or passing function arguments.
-4. Array Bound Checking (where possible): Ensure that accessing arrays (e.g., arr[i]) respects the array’s bounds, i.e., 0 <= i < length(arr).
-5. Other Checks: Feel free to explore additional checks that fit your language's semantics.
-
 Possible Optimizations
 Here are some common optimizations you might want to implement. These optimizations modify the AST:
 1. Constant Expression Simplification: Simplify constant expressions during compilation. For example, a = 5 + 3 can be reduced to a = 8, and expressions like 3 < 5 can be replaced with True.
 2. Removing Unused Variables: If variables are declared but never used in the program, they can be safely removed to reduce code clutter.
 3. Function Inlining: Replace function calls with the function body itself to reduce the overhead of function calls.
 Example: Before inlining:
-func foo(a : Integer) {
-  print("Hello")
-  print(a)
-}
+  func foo(a : Integer) {
+    print("Hello")
+    print(a)
+  }
 
-func main() {
-  a : Integer = 1
-  foo(a)
+  func main() {
+    a : Integer = 1
+    foo(a)
 
-  foo(2)
-}
+    foo(2)
+  }
 After inlining:
-func main() {
-  a : Integer = 1
-  print("Hello") // inlined foo(a)
-  print(a)
+  func main() {
+    a : Integer = 1
+    print("Hello") // inlined foo(a)
+    print(a)
 
-  print("Hello") // inlined foo(2)
-  print(2)
-}
+    print("Hello") // inlined foo(2)
+    print(2)
+  }
 4. Code simplification: Simplify conditional structures where possible.
-Example: Before:
-if (True) {
-  print("Hello")
+  Example: Before:
+  if (True) {
+    print("Hello")
+    print("There")
+  }
+  else {
+    print("Otherwise")
+  }
+  After simplification:
+  print("Hello") // if branch is always true. Completely remove else branch and replace the whole if structure with its body.
   print("There")
-}
-else {
-  print("Otherwise")
-}
-After simplification:
-print("Hello") // if branch is always true. Completely remove else branch and replace the whole if structure with its body.
-print("There")
 5. Removing Unreachable Code: Remove any code that will never be executed. For instance, code after a return statement:
-func foo() {
-  return 0
-  print("Hello") // this is unreachable code and can be removed at compile time
-}
-6. Additional Optimizations: You can implement other optimizations based on your analysis and creativity!
-
-Presentation Format
-The format of the presentation is the same as previous ones. You’ll need to upload your presentations to Moodle and demonstrate your work during the lab session. Each team will have 10 minutes for the presentation.
+  func foo() {
+    return 0
+    print("Hello") // this is unreachable code and can be removed at compile time
+  }
  */
 
 object Optimizer {
 
   def optimize(e: CodeBlock): CodeBlock = {
-    e
+    val statements = e.statements.foldLeft(List[Statement]())((ss, s) => s match {
+      case e: ExpressionStatement => ss :+ ExpressionStatement(optimizeExpr(e.expression))
+      case e: VariableDeclaration => ss :+ VariableDeclaration(e.name, optimizeExpr(e.expression))
+      case _ => ss :+ s
+    })
+    CodeBlock(statements)
+  }
+
+  private def optimizeExpr(expr: Expression): Expression = expr match {
+    case Binary(op, left, right) =>
+      (optimizeExpr(left), optimizeExpr(right)) match {
+        case (Literal(an: Number), Literal(bn: Number)) =>
+          val a = an.doubleValue()
+          val b = bn.doubleValue()
+          op match {
+            case Code.PLUS  =>
+              Literal(a + b)
+            case Code.MINUS =>
+              Literal(a - b)
+            case Code.MULTIPLICATION =>
+              Literal(a * b)
+            case Code.DIVISION if b != 0 && b != 0.0 =>
+              Literal(a / b)
+            case Code.DIVISION =>
+              Binary(op, Literal(a), Literal(b))
+            case Code.LESS => Literal(a < b)
+            case Code.LESS_OR_EQUAL => Literal(a <= b)
+            case Code.MORE => Literal(a > b)
+            case Code.MORE_OR_EQUAL => Literal(a >= b)
+            case Code.EQUAL => Literal(a == b)
+            case Code.NOT_EQUAL => Literal(a != b)
+            case _ => Binary(op, Literal(a), Literal(b))
+          }
+        case (Literal(a: Boolean), Literal(b: Boolean)) => op match {
+          case Code.AND => Literal(a && b)
+          case Code.OR => Literal(a || b)
+          case Code.XOR => Literal(a ^ b)
+          case Code.EQUAL => Literal(a == b)
+          case Code.NOT_EQUAL => Literal(a != b)
+          case _ => Binary(op, Literal(a), Literal(b))
+        }
+        case (l, r) => Binary(op, l, r)
+      }
+
+    case Unary(op, right) =>
+      optimizeExpr(right) match {
+        case Literal(a: Number) => op match {
+          case Code.MINUS =>
+            a match {
+              case ai: java.lang.Integer => Literal(-ai.intValue())
+              case al: java.lang.Long    => Literal(-al.longValue())
+              case ad: java.lang.Double  => Literal(-ad.doubleValue())
+              case af: java.lang.Float   => Literal(-af.floatValue())
+              case _ => Unary(op, Literal(a))
+            }
+
+          case _ => Unary(op, Literal(a))
+        }
+        case Literal(a: Boolean) => op match {
+          case Code.NOT => Literal(!a)
+          case _ => Unary(op, Literal(a))
+        }
+        case r => Unary(op, r)
+      }
+
+    case ArrayLiteral(elements) =>
+      ArrayLiteral(elements.map(optimizeExpr))
+    case TupleLiteral(entries) =>
+      TupleLiteral(entries.map(te => te.copy(value = optimizeExpr(te.value))))
+    case FunctionCall(target, args) =>
+      FunctionCall(optimizeExpr(target), args.map(optimizeExpr))
+    case _ => expr
   }
 
 }
