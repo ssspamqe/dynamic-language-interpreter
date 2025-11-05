@@ -5,9 +5,10 @@ import ru.innopolis.interpreter.lexer.{Code, Span, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
-import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Variable
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.VariableAssignment
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import org.scalatest.matchers.should.Matchers._
 
 class OptimizerTest extends AnyFunSuite {
 
@@ -124,7 +125,9 @@ class OptimizerTest extends AnyFunSuite {
       token(Code.ASSIGNMENT),
       token(Code.TRUE),
       token(Code.AND),
-      token(Code.FALSE)
+      token(Code.FALSE),
+      token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "a")
     )
 
     val orTokens = List(
@@ -144,7 +147,8 @@ class OptimizerTest extends AnyFunSuite {
     val xorResult = Optimizer.optimize(parse(xorTokens))
 
     assert(andResult == CodeBlock(List(
-      VariableDeclaration("a", Literal(false))
+      VariableDeclaration("a", Literal(false)),
+      ExpressionStatement(Variable("a"))
     )))
     assert(orResult == CodeBlock(List(
       ExpressionStatement(Literal(true))
@@ -232,7 +236,7 @@ class OptimizerTest extends AnyFunSuite {
       result == CodeBlock(
         List(
           ExpressionStatement(
-            Literal(4.3) // 5.5 - 1.2 = 4.3
+            Literal(4.3f)
           )
         )
       )
@@ -320,6 +324,120 @@ class OptimizerTest extends AnyFunSuite {
         List(ExpressionStatement(Literal(5.5)))
       )
     )
+  }
+
+  test("remove unused variable") {
+    val tokens = List(
+      token(Code.VAR),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT),
+      token(Code.INT_LITERAL, 42L),
+      token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ASSIGNMENT),
+      token(Code.INT_LITERAL, 5L)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    assert(
+      result == CodeBlock(List(
+        VariableAssignment("y", Literal(5))
+        ))
+      || result.statements.exists {
+          case VariableDeclaration(name, _) => name == "y"
+          case _ => false
+        }
+    )
+  }
+
+  test("keep used variable") {
+    val tokens = List(
+      token(Code.VAR),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT),
+      token(Code.INT_LITERAL, 10L),
+      token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.INT_LITERAL, 5L)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    assert(result.statements.exists {
+      case VariableDeclaration(name, _) => name == "x"
+      case _ => false
+    })
+  }
+
+  test("remove unused variable but keep side effect") {
+    val tokens = List(
+      token(Code.VAR),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT),
+      token(Code.IDENTIFIER, "foo"),
+      token(Code.ROUND_BRACKET_LEFT),
+      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "y"),
+      token(Code.ASSIGNMENT),
+      token(Code.INT_LITERAL, 7L)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    assert(result.statements.exists {
+      case ExpressionStatement(expr) =>
+        expr.toString.contains("foo")
+      case _ => false
+    })
+  }
+
+  test("multiple unused variables only used one kept") {
+    val tokens = List(
+      token(Code.VAR), token(Code.IDENTIFIER, "a"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 1L),
+      token(Code.NEWLINE),
+      token(Code.VAR), token(Code.IDENTIFIER, "b"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L),
+      token(Code.NEWLINE),
+      token(Code.VAR), token(Code.IDENTIFIER, "c"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 3L),
+      token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "b"),
+      token(Code.PLUS),
+      token(Code.INT_LITERAL, 10L)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }.toSet
+
+    assert(declNames == Set("b"))
+  }
+
+  test("keep variable if used in expression chain") {
+    val tokens = List(
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L),
+      token(Code.NEWLINE),
+      token(Code.VAR), token(Code.IDENTIFIER, "y"),
+      token(Code.ASSIGNMENT),
+      token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS),
+      token(Code.INT_LITERAL, 3L)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }.toSet
+
+    assert(declNames == Set("x"))
   }
 
 

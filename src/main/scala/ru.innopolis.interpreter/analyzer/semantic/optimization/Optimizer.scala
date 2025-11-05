@@ -1,9 +1,9 @@
 package ru.innopolis.interpreter.analyzer.semantic.optimization
 
 import ru.innopolis.interpreter.lexer._
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.FunctionCall
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
 
@@ -56,12 +56,26 @@ After inlining:
 object Optimizer {
 
   def optimize(e: CodeBlock): CodeBlock = {
-    val statements = e.statements.foldLeft(List[Statement]())((ss, s) => s match {
+    // evaluate constants
+    val optimizedStatements = e.statements.foldLeft(List[Statement]())((ss, s) => s match {
       case e: ExpressionStatement => ss :+ ExpressionStatement(optimizeExpr(e.expression))
       case e: VariableDeclaration => ss :+ VariableDeclaration(e.name, optimizeExpr(e.expression))
       case _ => ss :+ s
     })
-    CodeBlock(statements)
+
+    // remove unused variables
+    val usedVariables = collectUsedVariables(optimizedStatements)
+    val filteredStatements = optimizedStatements.flatMap {
+      case vd@VariableDeclaration(name, expr) =>
+        if (usedVariables.contains(name)) Some(vd)
+        else {
+          if (hasSideEffect(expr)) Some(ExpressionStatement(expr))
+          else None
+        }
+      case other => Some(other)
+    }
+
+    CodeBlock(filteredStatements)
   }
 
   private def optimizeExpr(expr: Expression): Expression = expr match {
@@ -71,7 +85,7 @@ object Optimizer {
           val a = an.doubleValue()
           val b = bn.doubleValue()
           op match {
-            case Code.PLUS  =>
+            case Code.PLUS =>
               Literal(a + b)
             case Code.MINUS =>
               Literal(a - b)
@@ -106,9 +120,9 @@ object Optimizer {
           case Code.MINUS =>
             a match {
               case ai: java.lang.Integer => Literal(-ai.intValue())
-              case al: java.lang.Long    => Literal(-al.longValue())
-              case ad: java.lang.Double  => Literal(-ad.doubleValue())
-              case af: java.lang.Float   => Literal(-af.floatValue())
+              case al: java.lang.Long => Literal(-al.longValue())
+              case ad: java.lang.Double => Literal(-ad.doubleValue())
+              case af: java.lang.Float => Literal(-af.floatValue())
               case _ => Unary(op, Literal(a))
             }
 
@@ -128,6 +142,38 @@ object Optimizer {
     case FunctionCall(target, args) =>
       FunctionCall(optimizeExpr(target), args.map(optimizeExpr))
     case _ => expr
+  }
+
+  private def collectUsedVariables(statements: List[Statement]): Set[String] = {
+    def collectExpr(expr: Expression): Set[String] = expr match {
+      case ArrayAccess(Variable(name), _) => Set(name)
+      case FunctionCall(Variable(name), _) => Set(name)
+      case TupleFieldAccess(Variable(name), _) => Set(name)
+      case TupleIndexAccess(Variable(name), _) => Set(name)
+      case Binary(_, l, r) => collectExpr(l) ++ collectExpr(r)
+      case Unary(_, e) => collectExpr(e)
+      case FunctionCall(target, args) =>
+        collectExpr(target) ++ args.flatMap(collectExpr).toSet
+      case ArrayLiteral(elements) => elements.flatMap(collectExpr).toSet
+      case TupleLiteral(entries) => entries.flatMap(e => collectExpr(e.value)).toSet
+      case Variable(name) => Set(name)
+      case _ => Set.empty
+    }
+
+    statements.flatMap {
+      case ExpressionStatement(expr) => collectExpr(expr)
+      case VariableDeclaration(_, expr) => collectExpr(expr)
+      case _ => Set.empty
+    }.toSet
+  }
+
+  private def hasSideEffect(expr: Expression): Boolean = expr match {
+    case FunctionCall(_, _) => true
+    case Binary(_, l, r) => hasSideEffect(l) || hasSideEffect(r)
+    case Unary(_, e) => hasSideEffect(e)
+    case ArrayLiteral(elements) => elements.exists(hasSideEffect)
+    case TupleLiteral(entries) => entries.exists(e => hasSideEffect(e.value))
+    case _ => false
   }
 
 }
