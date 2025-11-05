@@ -2,10 +2,7 @@
 var x := 1;
 ---
 VAR(var)
-SPACE( )
 IDENTIFIER(x)
-SPACE( )
 ASSIGNMENT(:=)
-SPACE( )
 INT_LITERAL(1)
-SEMICOLON(;)
+NEWLINE(;)
