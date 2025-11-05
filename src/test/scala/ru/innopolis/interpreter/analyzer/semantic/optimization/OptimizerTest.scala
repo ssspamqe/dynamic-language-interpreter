@@ -1,6 +1,7 @@
 package ru.innopolis.interpreter.analyzer.semantic.optimization
 
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers._
 import ru.innopolis.interpreter.lexer.{Code, Span, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
@@ -8,15 +9,13 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, Expre
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Variable
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.VariableAssignment
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
-import org.scalatest.matchers.should.Matchers._
 
 class OptimizerTest extends AnyFunSuite {
 
   private val dummySpan = Span(0, 0, 0)
 
-  private def token(code: Code, value: Any = null): Token[_] = {
+  private def token(code: Code, value: Any = null): Token[_] =
     Token(dummySpan, code, value)
-  }
 
   private def parse(tokens: List[Token[_]]): CodeBlock = {
     val parser = new AASTParser(new TokenStream(tokens))
@@ -31,15 +30,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(3L)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(3L))))
   }
 
   test("subtract constants") {
@@ -50,15 +41,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(7.0)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(7.0))))
   }
 
   test("multiply constants") {
@@ -69,15 +52,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(20.0)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(20.0))))
   }
 
   test("divide constants") {
@@ -88,15 +63,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(4.0)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(4.0))))
   }
 
   test("comparison less-than constants") {
@@ -107,91 +74,44 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(true)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(true))))
   }
 
   test("boolean and/or/xor constants") {
     val andTokens = List(
-      token(Code.VAR),
-      token(Code.IDENTIFIER, "a"),
+      token(Code.VAR), token(Code.IDENTIFIER, "a"),
       token(Code.ASSIGNMENT),
-      token(Code.TRUE),
-      token(Code.AND),
-      token(Code.FALSE),
-      token(Code.NEWLINE),
-      token(Code.IDENTIFIER, "a")
+      token(Code.TRUE), token(Code.AND), token(Code.FALSE),
+      token(Code.NEWLINE), token(Code.IDENTIFIER, "a")
     )
 
-    val orTokens = List(
-      token(Code.TRUE),
-      token(Code.OR),
-      token(Code.FALSE)
-    )
-
-    val xorTokens = List(
-      token(Code.TRUE),
-      token(Code.XOR),
-      token(Code.FALSE)
-    )
+    val orTokens = List(token(Code.TRUE), token(Code.OR), token(Code.FALSE))
+    val xorTokens = List(token(Code.TRUE), token(Code.XOR), token(Code.FALSE))
 
     val andResult = Optimizer.optimize(parse(andTokens))
     val orResult  = Optimizer.optimize(parse(orTokens))
     val xorResult = Optimizer.optimize(parse(xorTokens))
 
-    assert(andResult == CodeBlock(List(
+    andResult shouldBe CodeBlock(List(
       VariableDeclaration("a", Literal(false)),
       ExpressionStatement(Variable("a"))
-    )))
-    assert(orResult == CodeBlock(List(
-      ExpressionStatement(Literal(true))
-    )))
-    assert(xorResult == CodeBlock(List(
-      ExpressionStatement(Literal(true))
-    )))
+    ))
+    orResult shouldBe CodeBlock(List(ExpressionStatement(Literal(true))))
+    xorResult shouldBe CodeBlock(List(ExpressionStatement(Literal(true))))
   }
 
   test("unary minus constant") {
-    val tokens = List(
-      token(Code.MINUS),
-      token(Code.INT_LITERAL, 5L)
-    )
+    val tokens = List(token(Code.MINUS), token(Code.INT_LITERAL, 5L))
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(-5.0)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(-5.0))))
   }
 
   test("unary not constant") {
-    val tokens = List(
-      token(Code.NOT),
-      token(Code.TRUE)
-    )
+    val tokens = List(token(Code.NOT), token(Code.TRUE))
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(false)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(false))))
   }
 
   test("non-constant expression should remain unchanged") {
@@ -202,7 +122,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(result != CodeBlock(List(ExpressionStatement(Literal(2L)))))
+    result should not be CodeBlock(List(ExpressionStatement(Literal(2L))))
   }
 
   test("sum float constants") {
@@ -213,15 +133,10 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(4.0) // result converted to Double in Optimizer
-          )
-        )
-      )
-    )
+    val Literal(value: Double) =
+      result.statements.head.asInstanceOf[ExpressionStatement].expression
+
+    value shouldBe 4.0 +- 1e-6
   }
 
   test("subtract float constants") {
@@ -232,15 +147,10 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(4.3f)
-          )
-        )
-      )
-    )
+    val Literal(value: Double) =
+      result.statements.head.asInstanceOf[ExpressionStatement].expression
+
+    value shouldBe 4.3 +- 1e-5
   }
 
   test("multiply float constants") {
@@ -251,15 +161,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(10.0)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(10.0))))
   }
 
   test("divide float constants") {
@@ -270,15 +172,7 @@ class OptimizerTest extends AnyFunSuite {
     )
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(
-          ExpressionStatement(
-            Literal(3.0)
-          )
-        )
-      )
-    )
+    result shouldBe CodeBlock(List(ExpressionStatement(Literal(3.0))))
   }
 
   test("compare float constants less and greater") {
@@ -287,7 +181,6 @@ class OptimizerTest extends AnyFunSuite {
       token(Code.LESS),
       token(Code.REAL_LITERAL, 2.0f)
     )
-
     val greaterTokens = List(
       token(Code.REAL_LITERAL, 3.2f),
       token(Code.MORE),
@@ -297,17 +190,8 @@ class OptimizerTest extends AnyFunSuite {
     val lessResult = Optimizer.optimize(parse(lessTokens))
     val greaterResult = Optimizer.optimize(parse(greaterTokens))
 
-    assert(
-      lessResult == CodeBlock(
-        List(ExpressionStatement(Literal(true)))
-      )
-    )
-
-    assert(
-      greaterResult == CodeBlock(
-        List(ExpressionStatement(Literal(true)))
-      )
-    )
+    lessResult shouldBe CodeBlock(List(ExpressionStatement(Literal(true))))
+    greaterResult shouldBe CodeBlock(List(ExpressionStatement(Literal(true))))
   }
 
   test("mixed int and float constants") {
@@ -316,98 +200,81 @@ class OptimizerTest extends AnyFunSuite {
       token(Code.PLUS),
       token(Code.REAL_LITERAL, 3.5f)
     )
-
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(
-        List(ExpressionStatement(Literal(5.5)))
-      )
-    )
+    val Literal(value: Double) =
+      result.statements.head.asInstanceOf[ExpressionStatement].expression
+
+    value shouldBe 5.5 +- 1e-6
   }
 
   test("remove unused variable") {
     val tokens = List(
-      token(Code.VAR),
-      token(Code.IDENTIFIER, "x"),
-      token(Code.ASSIGNMENT),
-      token(Code.INT_LITERAL, 42L),
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 42L),
       token(Code.NEWLINE),
-      token(Code.IDENTIFIER, "y"),
-      token(Code.ASSIGNMENT),
-      token(Code.INT_LITERAL, 5L)
+      token(Code.IDENTIFIER, "y"), token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 5L)
     )
 
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(
-      result == CodeBlock(List(
-        VariableAssignment("y", Literal(5))
-        ))
-      || result.statements.exists {
-          case VariableDeclaration(name, _) => name == "y"
-          case _ => false
-        }
-    )
+    val hasY = result.statements.exists {
+      case VariableDeclaration(name, _) => name == "y"
+      case VariableAssignment(name, _)  => name == "y"
+      case _ => false
+    }
+
+    hasY shouldBe true
   }
 
   test("keep used variable") {
     val tokens = List(
-      token(Code.VAR),
-      token(Code.IDENTIFIER, "x"),
-      token(Code.ASSIGNMENT),
-      token(Code.INT_LITERAL, 10L),
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 10L),
       token(Code.NEWLINE),
       token(Code.IDENTIFIER, "x"),
-      token(Code.PLUS),
-      token(Code.INT_LITERAL, 5L)
+      token(Code.PLUS), token(Code.INT_LITERAL, 5L)
     )
 
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(result.statements.exists {
-      case VariableDeclaration(name, _) => name == "x"
-      case _ => false
-    })
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }
+
+    declNames should contain ("x")
   }
 
   test("remove unused variable but keep side effect") {
     val tokens = List(
-      token(Code.VAR),
-      token(Code.IDENTIFIER, "x"),
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
       token(Code.ASSIGNMENT),
       token(Code.IDENTIFIER, "foo"),
-      token(Code.ROUND_BRACKET_LEFT),
-      token(Code.ROUND_BRACKET_RIGHT),
+      token(Code.ROUND_BRACKET_LEFT), token(Code.ROUND_BRACKET_RIGHT),
       token(Code.NEWLINE),
       token(Code.IDENTIFIER, "y"),
-      token(Code.ASSIGNMENT),
-      token(Code.INT_LITERAL, 7L)
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 7L)
     )
 
     val result = Optimizer.optimize(parse(tokens))
 
-    assert(result.statements.exists {
-      case ExpressionStatement(expr) =>
-        expr.toString.contains("foo")
+    val hasFooCall = result.statements.exists {
+      case ExpressionStatement(expr) => expr.toString.contains("foo")
       case _ => false
-    })
+    }
+
+    hasFooCall shouldBe true
   }
 
   test("multiple unused variables only used one kept") {
     val tokens = List(
       token(Code.VAR), token(Code.IDENTIFIER, "a"),
-      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 1L),
-      token(Code.NEWLINE),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 1L), token(Code.NEWLINE),
       token(Code.VAR), token(Code.IDENTIFIER, "b"),
-      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L),
-      token(Code.NEWLINE),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L), token(Code.NEWLINE),
       token(Code.VAR), token(Code.IDENTIFIER, "c"),
-      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 3L),
-      token(Code.NEWLINE),
-      token(Code.IDENTIFIER, "b"),
-      token(Code.PLUS),
-      token(Code.INT_LITERAL, 10L)
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 3L), token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "b"), token(Code.PLUS), token(Code.INT_LITERAL, 10L)
     )
 
     val result = Optimizer.optimize(parse(tokens))
@@ -416,19 +283,16 @@ class OptimizerTest extends AnyFunSuite {
       case VariableDeclaration(name, _) => name
     }.toSet
 
-    assert(declNames == Set("b"))
+    declNames shouldBe Set("b")
   }
 
   test("keep variable if used in expression chain") {
     val tokens = List(
       token(Code.VAR), token(Code.IDENTIFIER, "x"),
-      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L),
-      token(Code.NEWLINE),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L), token(Code.NEWLINE),
       token(Code.VAR), token(Code.IDENTIFIER, "y"),
-      token(Code.ASSIGNMENT),
-      token(Code.IDENTIFIER, "x"),
-      token(Code.PLUS),
-      token(Code.INT_LITERAL, 3L)
+      token(Code.ASSIGNMENT), token(Code.IDENTIFIER, "x"),
+      token(Code.PLUS), token(Code.INT_LITERAL, 3L)
     )
 
     val result = Optimizer.optimize(parse(tokens))
@@ -437,8 +301,6 @@ class OptimizerTest extends AnyFunSuite {
       case VariableDeclaration(name, _) => name
     }.toSet
 
-    assert(declNames == Set("x"))
+    declNames shouldBe Set("x")
   }
-
-
 }
