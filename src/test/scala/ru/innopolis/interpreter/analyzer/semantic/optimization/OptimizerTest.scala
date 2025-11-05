@@ -1,15 +1,13 @@
-package ru.innopolis.interpreter
+package ru.innopolis.interpreter.analyzer.semantic.optimization
 
 import org.scalatest.funsuite.AnyFunSuite
 import ru.innopolis.interpreter.lexer.{Code, Span, Token}
-import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, ExpressionParser, TokenStream}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Expression
+import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
+import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
 
-import java.beans.Expression
-
-class ASTOptimizerTest extends AnyFunSuite {
+class OptimizerTest extends AnyFunSuite {
 
   private val dummySpan = Span(0, 0, 0)
 
@@ -28,7 +26,7 @@ class ASTOptimizerTest extends AnyFunSuite {
       token(Code.PLUS),
       token(Code.INT_LITERAL, 2L)
     )
-    val result = SemanticAnalyzer.analyze(parse(tokens))
+    val result = Optimizer.optimize(parse(tokens))
 
     assert(
       result == CodeBlock(

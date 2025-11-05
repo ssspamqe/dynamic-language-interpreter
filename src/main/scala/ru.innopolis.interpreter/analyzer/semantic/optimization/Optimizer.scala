@@ -1,9 +1,5 @@
-package ru.innopolis.interpreter
+package ru.innopolis.interpreter.analyzer.semantic.optimization
 
-import ru.innopolis.interpreter.lexer.Code
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 
 /*
@@ -72,21 +68,10 @@ Presentation Format
 The format of the presentation is the same as previous ones. You’ll need to upload your presentations to Moodle and demonstrate your work during the lab session. Each team will have 10 minutes for the presentation.
  */
 
-object SemanticAnalyzer {
+object Optimizer {
 
-  def analyze(expression: CodeBlock): CodeBlock = {
-
-    checkAst(expression)
-    val optimizedExpression = optimizeAst(expression)
-
-    optimizedExpression
-  }
-
-  private def optimizeAst(e: CodeBlock): CodeBlock = {
+  def optimize(e: CodeBlock): CodeBlock = {
     e
   }
 
-  private def checkAst(e: CodeBlock): Unit = {
-
-  }
 }
