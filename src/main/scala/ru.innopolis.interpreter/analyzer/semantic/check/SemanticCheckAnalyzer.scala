@@ -1,5 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.semantic
 
+import ru.innopolis.interpreter.exception.SemanticCheckException
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
@@ -11,131 +12,123 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{CollectionL
 
 import scala.collection.mutable
 
-// Exception for semantic errors
-class SemanticException(msg: String) extends RuntimeException(msg)
+class SemanticCheckAnalyzer {
 
-class SemanticAnalyzer {
-
-  // stack of scopes (name -> either variable type placeholder or function signature)
   private val scopes: mutable.Stack[mutable.Set[String]] = mutable.Stack(mutable.Set.empty[String])
 
   private var inFunction: Boolean = false
   private var inLoop: Boolean = false
 
-  // entry point
-  def analyze(block: CodeBlock): Unit = analyzeCodeBlock(block)
+  def analyze(block: CodeBlock): Unit = checkCodeBlock(block)
 
-  // analyze code block
-  private def analyzeCodeBlock(block: CodeBlock): Unit = {
+  private def checkCodeBlock(block: CodeBlock): Unit = {
     enterScope()
-    block.statements.foreach(analyzeStatement)
+    block.statements.foreach(checkStatement)
     exitScope()
   }
 
-  // analyze statement
-  private def analyzeStatement(stmt: Statement): Unit = stmt match {
+  private def checkStatement(stmt: Statement): Unit = stmt match {
     case VariableDeclaration(name, expr) =>
-      analyzeExpression(expr)
+      checkExpression(expr)
       declareVariable(name)
 
     case VariableAssignment(name, expr) =>
-      analyzeExpression(expr)
+      checkExpression(expr)
       if (!isDeclared(name))
-        throw new SemanticException(s"Variable '$name' not declared before assignment")
+        throw new SemanticCheckException(s"Variable '$name' was not declared before")
 
     case ArrayElementAssignment(target, index, expr) =>
-      analyzeExpression(target)
-      analyzeExpression(index)
-      analyzeExpression(expr)
+      checkExpression(target)
+      checkExpression(index)
+      checkExpression(expr)
 
     case ExpressionStatement(expr) =>
-      analyzeExpression(expr)
+      checkExpression(expr)
 
     case ReturnStatement(exprOpt) =>
-      if (!inFunction) throw new SemanticException("`return` outside function")
-      exprOpt.foreach(analyzeExpression)
+      if (!inFunction) throw new SemanticCheckException("`return` is outside of function")
+      exprOpt.foreach(checkExpression)
 
     case PrintStatement(exprs) =>
-      exprs.foreach(analyzeExpression)
+      exprs.foreach(checkExpression)
 
     case IfStatement(cond, thenBlock, elseBlock) =>
-      analyzeExpression(cond)
-      analyzeCodeBlock(thenBlock)
-      elseBlock.foreach(analyzeCodeBlock)
+      checkExpression(cond)
+      checkCodeBlock(thenBlock)
+      elseBlock.foreach(checkCodeBlock)
 
     case WhileLoop(cond, body) =>
-      analyzeExpression(cond)
+      checkExpression(cond)
       val prev = inLoop
       inLoop = true
-      analyzeCodeBlock(body)
+      checkCodeBlock(body)
       inLoop = prev
 
     case CollectionLoop(varName, coll, body) =>
-      analyzeExpression(coll)
+      checkExpression(coll)
       enterScope()
       declareVariable(varName)
       val prev = inLoop
       inLoop = true
-      analyzeCodeBlock(body)
+      checkCodeBlock(body)
       inLoop = prev
       exitScope()
 
     case RangeLoop(optVar, from, to, body) =>
-      analyzeExpression(from)
-      analyzeExpression(to)
+      checkExpression(from)
+      checkExpression(to)
       optVar.foreach { v =>
         enterScope()
         declareVariable(v)
         val prev = inLoop
         inLoop = true
-        analyzeCodeBlock(body)
+        checkCodeBlock(body)
         inLoop = prev
         exitScope()
       }
       if (optVar.isEmpty) {
         val prev = inLoop
         inLoop = true
-        analyzeCodeBlock(body)
+        checkCodeBlock(body)
         inLoop = prev
       }
 
     case Loop(body) =>
       val prev = inLoop
       inLoop = true
-      analyzeCodeBlock(body)
+      checkCodeBlock(body)
       inLoop = prev
 
     case ExitStatement() =>
-      if (!inLoop) throw new SemanticException("`exit` outside loop")
+      if (!inLoop) throw new SemanticCheckException("`exit` is outside of loop")
   }
 
-  // analyze expressions
-  private def analyzeExpression(expr: Expression): Unit = expr match {
+  private def checkExpression(expr: Expression): Unit = expr match {
     case Literal(v) => // literals are always valid
 
     case Variable(name) => validateDeclaration(name)
 
-    case Unary(_, inner) => analyzeExpression(inner)
+    case Unary(_, inner) => checkExpression(inner)
 
     case Binary(_, left, right) =>
-      analyzeExpression(left)
-      analyzeExpression(right)
+      checkExpression(left)
+      checkExpression(right)
 
     case TypeCheck(inner, _) =>
-      analyzeExpression(inner)
+      checkExpression(inner)
 
     case ArrayLiteral(elements) =>
-      elements.foreach(analyzeExpression)
+      elements.foreach(checkExpression)
 
     case TupleLiteral(elems) =>
-      elems.foreach { case TupleEntry(_, e) => analyzeExpression(e) }
+      elems.foreach { case TupleEntry(_, e) => checkExpression(e) }
 
     case FunctionLiteral(args, body) =>
       enterScope()
       args.foreach(v => declareVariable(v.value))
       val prevInFunction = inFunction
       inFunction = true
-      analyzeCodeBlock(body)
+      checkCodeBlock(body)
       inFunction = prevInFunction
       exitScope()
 
@@ -144,30 +137,29 @@ class SemanticAnalyzer {
       args.foreach(v => declareVariable(v.value))
       val prevInFunction = inFunction
       inFunction = true
-      analyzeExpression(expr)
+      checkExpression(expr)
       inFunction = prevInFunction
       exitScope()
 
     case FunctionCall(funcExpr, args) =>
-      analyzeExpression(funcExpr)
-      args.foreach(a => analyzeExpression(a))
+      checkExpression(funcExpr)
+      args.foreach(a => checkExpression(a))
 
 
     case ArrayAccess(target, idx) =>
-      analyzeExpression(target)
-      analyzeExpression(idx)
+      checkExpression(target)
+      checkExpression(idx)
 
     case TupleFieldAccess(target, _) =>
-      analyzeExpression(target)
+      checkExpression(target)
 
     case TupleIndexAccess(target, _) =>
-      analyzeExpression(target)
+      checkExpression(target)
 
     case other =>
-      throw new SemanticException(s"Unknown expression type: ${other.getClass.getSimpleName}")
+      throw new SemanticCheckException(s"Unknown expression type: ${other.getClass.getSimpleName}")
   }
 
-  // helpers
   private def enterScope(): Unit = scopes.push(mutable.Set.empty)
 
   private def exitScope(): Unit = if (scopes.nonEmpty) scopes.pop()
@@ -178,7 +170,7 @@ class SemanticAnalyzer {
 
   private def validateDeclaration(name: String): Unit = {
     if (!isDeclared(name)) {
-      throw new SemanticException(s"Identifier '$name' not declared")
+      throw new SemanticCheckException(s"Identifier '$name' not declared")
     }
   }
 }

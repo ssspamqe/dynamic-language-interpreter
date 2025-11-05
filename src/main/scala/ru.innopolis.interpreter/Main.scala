@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter
 
-import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticAnalyzer
+import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticCheckAnalyzer
 import ru.innopolis.interpreter.lexer.{Code, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, ExpressionParser, TokenStream}
 
@@ -20,9 +20,9 @@ object Main {
       """var i := func(a,b) is
         |for i in 1..(a+b) loop
         |i=i+1
-        |
         |end
         |return
+        |i
         |end""".stripMargin
 
     val tokens = lexer.tokenize(code)
@@ -37,7 +37,7 @@ object Main {
     val parser = new AASTParser(stream)
     val tree = parser.parse()
 
-    val analyzer =  new SemanticAnalyzer()
+    val analyzer =  new SemanticCheckAnalyzer()
     analyzer.analyze(tree)
     printCaseClass(tree)
     println(tree)
