@@ -17,13 +17,7 @@ object Main {
 //        |""".stripMargin
 
     val code =
-      """var i := func(a,b) is
-        |for i in 1..(a+b) loop
-        |i=i+1
-        |end
-        |return
-        |i
-        |end""".stripMargin
+      """var i := "str1" > "st" """.stripMargin
 
     val tokens = lexer.tokenize(code)
       .filter(_.code != Code.SPACE)

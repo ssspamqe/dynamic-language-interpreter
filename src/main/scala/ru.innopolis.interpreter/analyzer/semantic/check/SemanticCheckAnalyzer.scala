@@ -1,10 +1,13 @@
 package ru.innopolis.interpreter.syntax.analyzer.semantic
 
 import ru.innopolis.interpreter.exception.SemanticCheckException
+import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.TypeCheck
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator.{ArrayType, BoolType, FuncType, TupleType}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
@@ -103,25 +106,41 @@ class SemanticCheckAnalyzer {
       if (!inLoop) throw new SemanticCheckException("`exit` is outside of loop")
   }
 
-  private def checkExpression(expr: Expression): Unit = expr match {
-    case Literal(v) => // literals are always valid
+  private def checkExpression(expr: Expression): Option[TypeIndicator] = expr match {
+    case Literal(v) => v match {
+      case _: Int | _: Long => Some(TypeIndicator.IntType)
+      case _: Double => Some(TypeIndicator.RealType)
+      case _: Boolean => Some(TypeIndicator.BoolType)
+      case _: String => Some(TypeIndicator.StringType)
+      case t => throw new SemanticCheckException(s"Unknown type in expression $expr: ${t.getClass.getSimpleName} ")
+    }
 
-    case Variable(name) => validateDeclaration(name)
+    case Variable(name) =>
+      validateDeclaration(name)
+      None
 
     case Unary(_, inner) => checkExpression(inner)
 
-    case Binary(_, left, right) =>
-      checkExpression(left)
-      checkExpression(right)
+    case Binary(op, left, right) =>
+      val firstTypeOption = checkExpression(left)
+      val secondTypeOption = checkExpression(right)
+
+      if (!(firstTypeOption.nonEmpty && secondTypeOption.nonEmpty))
+        None
+      else
+        Some(inferType(firstTypeOption.get, secondTypeOption.get, op))
 
     case TypeCheck(inner, _) =>
       checkExpression(inner)
+      Some(BoolType)
 
     case ArrayLiteral(elements) =>
       elements.foreach(checkExpression)
+      Some(ArrayType)
 
     case TupleLiteral(elems) =>
       elems.foreach { case TupleEntry(_, e) => checkExpression(e) }
+      Some(TupleType)
 
     case FunctionLiteral(args, body) =>
       enterScope()
@@ -131,6 +150,7 @@ class SemanticCheckAnalyzer {
       checkCodeBlock(body)
       inFunction = prevInFunction
       exitScope()
+      Some(FuncType)
 
     case LambdaLiteral(args, expr) =>
       enterScope()
@@ -140,10 +160,12 @@ class SemanticCheckAnalyzer {
       checkExpression(expr)
       inFunction = prevInFunction
       exitScope()
+      Some(FuncType)
 
     case FunctionCall(funcExpr, args) =>
       checkExpression(funcExpr)
       args.foreach(a => checkExpression(a))
+      None
 
 
     case ArrayAccess(target, idx) =>
@@ -171,6 +193,58 @@ class SemanticCheckAnalyzer {
   private def validateDeclaration(name: String): Unit = {
     if (!isDeclared(name)) {
       throw new SemanticCheckException(s"Identifier '$name' not declared")
+    }
+  }
+
+  private def inferType(t1: TypeIndicator, t2: TypeIndicator, op: Code): TypeIndicator = {
+    import TypeIndicator._
+    import ru.innopolis.interpreter.lexer.Code._
+
+    (op, t1, t2) match {
+
+      //arithmetic
+      case (PLUS | MINUS | MULTIPLICATION | DIVISION, IntType, IntType) =>
+        if (op == DIVISION) RealType else IntType
+      case (PLUS | MINUS | MULTIPLICATION | DIVISION, RealType, RealType) =>
+        RealType
+      case (PLUS | MINUS | MULTIPLICATION | DIVISION, IntType, RealType) |
+           (PLUS | MINUS | MULTIPLICATION | DIVISION, RealType, IntType) =>
+        RealType
+
+      //string concat
+      case (PLUS, StringType, StringType) =>
+        StringType
+
+      //tuple concat
+      case (PLUS, TupleType, TupleType) =>
+        TupleType
+
+      //array concat
+      case (PLUS, ArrayType, ArrayType) =>
+        ArrayType
+
+      //boolean
+      case (LESS | MORE | LESS_OR_EQUAL | MORE_OR_EQUAL | EQUAL | NOT_EQUAL, IntType, IntType) |
+           (LESS | MORE | LESS_OR_EQUAL | MORE_OR_EQUAL | EQUAL | NOT_EQUAL, RealType, RealType) |
+           (LESS | MORE | LESS_OR_EQUAL | MORE_OR_EQUAL | EQUAL | NOT_EQUAL, IntType, RealType) |
+           (LESS | MORE | LESS_OR_EQUAL | MORE_OR_EQUAL | EQUAL | NOT_EQUAL, RealType, IntType) =>
+        BoolType
+
+      //logican
+      case (AND | OR | XOR, BoolType, BoolType) =>
+        BoolType
+
+      //eq
+      case (EQUAL | NOT_EQUAL, BoolType, BoolType) =>
+        BoolType
+      case (EQUAL | NOT_EQUAL, StringType, StringType) =>
+        BoolType
+
+      //otherwise
+      case _ =>
+        throw new SemanticCheckException(
+          s"Operation '$op' is not allowed between types $t1 and $t2"
+        )
     }
   }
 }
