@@ -70,12 +70,6 @@ class SemanticAnalyzer {
       analyzeCodeBlock(body)
       inLoop = prev
 
-    case Loop(body) =>
-      val prev = inLoop
-      inLoop = true
-      analyzeCodeBlock(body)
-      inLoop = prev
-
     case CollectionLoop(varName, coll, body) =>
       analyzeExpression(coll)
       enterScope()
@@ -104,6 +98,12 @@ class SemanticAnalyzer {
         analyzeCodeBlock(body)
         inLoop = prev
       }
+
+    case Loop(body) =>
+      val prev = inLoop
+      inLoop = true
+      analyzeCodeBlock(body)
+      inLoop = prev
 
     case ExitStatement() =>
       if (!inLoop) throw new SemanticException("`exit` outside loop")
