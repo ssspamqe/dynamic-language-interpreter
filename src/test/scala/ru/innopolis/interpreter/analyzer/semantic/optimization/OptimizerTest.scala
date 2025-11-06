@@ -2,11 +2,13 @@ package ru.innopolis.interpreter.analyzer.semantic.optimization
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers._
+import ru.innopolis.interpreter.RegexLexer
 import ru.innopolis.interpreter.lexer.{Code, Span, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Variable
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.VariableAssignment
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
 
@@ -206,6 +208,36 @@ class OptimizerTest extends AnyFunSuite {
       result.statements.head.asInstanceOf[ExpressionStatement].expression
 
     value shouldBe 5.5 +- 1e-6
+  }
+
+  test("evaluate constants in array index") {
+    val code = "arr[1 + 2 + 3]"
+
+    val lexer = new RegexLexer()
+    val tokens = lexer.tokenize(code)
+    val stream = new TokenStream(tokens)
+    val parser = new AASTParser(stream)
+    val expression = parser.parse()
+    val result = Optimizer.optimize(expression)
+
+    result shouldBe CodeBlock(List(ExpressionStatement(
+      ArrayAccess(Variable("arr"), Literal(6))
+    )))
+  }
+
+  test("evaluate constants in args of function call") {
+    val code = "f(1 + 2 + 3)"
+
+    val lexer = new RegexLexer()
+    val tokens = lexer.tokenize(code)
+    val stream = new TokenStream(tokens)
+    val parser = new AASTParser(stream)
+    val expression = parser.parse()
+    val result = Optimizer.optimize(expression)
+
+    result shouldBe CodeBlock(List(ExpressionStatement(
+      FunctionCall(Variable("f"), List(Literal(6)))
+    )))
   }
 
   test("remove unused variable") {
