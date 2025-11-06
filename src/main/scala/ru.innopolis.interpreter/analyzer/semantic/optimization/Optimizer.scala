@@ -146,10 +146,11 @@ object Optimizer {
 
   private def collectUsedVariables(statements: List[Statement]): Set[String] = {
     def collectExpr(expr: Expression): Set[String] = expr match {
-      case ArrayAccess(Variable(name), _) => Set(name)
-      case FunctionCall(Variable(name), _) => Set(name)
-      case TupleFieldAccess(Variable(name), _) => Set(name)
-      case TupleIndexAccess(Variable(name), _) => Set(name)
+      case ArrayAccess(a, b) => collectExpr(a) ++ collectExpr(b)
+      case ArrayAccess(a, b) => collectExpr(a) ++ collectExpr(b)
+      case FunctionCall(a, b) => collectExpr(a) ++ b.flatMap(collectExpr(_))
+      case TupleFieldAccess(a, _) => collectExpr(a)
+      case TupleIndexAccess(a, _) => collectExpr(a)
       case Binary(_, l, r) => collectExpr(l) ++ collectExpr(r)
       case Unary(_, e) => collectExpr(e)
       case FunctionCall(target, args) =>
