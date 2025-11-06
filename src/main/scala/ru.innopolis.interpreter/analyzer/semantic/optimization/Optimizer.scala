@@ -5,7 +5,9 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop._
 
 /*
 Possible Optimizations
@@ -58,8 +60,17 @@ object Optimizer {
   def optimize(e: CodeBlock): CodeBlock = {
     // evaluate constants
     val optimizedStatements = e.statements.foldLeft(List[Statement]())((ss, s) => s match {
-      case e: ExpressionStatement => ss :+ ExpressionStatement(optimizeExpr(e.expression))
+      case e: ArrayElementAssignment => ss :+ ArrayElementAssignment(optimizeExpr(e.target), optimizeExpr(e.index), optimizeExpr(e.value))
+      case e: VariableAssignment => ss :+ VariableAssignment(e.name, optimizeExpr(e.value))
       case e: VariableDeclaration => ss :+ VariableDeclaration(e.name, optimizeExpr(e.expression))
+      case e: CollectionLoop => ss :+ CollectionLoop(e.ident, optimizeExpr(e.collection), optimize(e.body))
+      case e: RangeLoop => ss :+ RangeLoop(e.ident, optimizeExpr(e.from), optimizeExpr(e.to), optimize(e.body))
+      case e: WhileLoop => ss :+ WhileLoop(optimizeExpr(e.condition), optimize(e.body))
+      case e: Loop => ss :+ new Loop(optimize(e.body))
+      case e: ExpressionStatement => ss :+ ExpressionStatement(optimizeExpr(e.expression))
+      case e: IfStatement => ss :+ IfStatement(optimizeExpr(e.condition), optimize(e.trueBranch), e.falseBranch.map(optimize))
+      case e: PrintStatement => ss :+ PrintStatement(e.expression.map(optimizeExpr))
+      case e: ReturnStatement => ss :+ ReturnStatement(e.expression.map(optimizeExpr))
       case _ => ss :+ s
     })
 
@@ -134,7 +145,8 @@ object Optimizer {
         }
         case r => Unary(op, r)
       }
-
+    case ArrayAccess(t, i) =>
+      ArrayAccess(optimizeExpr(t), optimizeExpr(i))
     case ArrayLiteral(elements) =>
       ArrayLiteral(elements.map(optimizeExpr))
     case TupleLiteral(entries) =>
