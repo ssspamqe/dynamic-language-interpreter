@@ -89,7 +89,7 @@ object Optimizer {
     CodeBlock(filteredStatements)
   }
 
-  private def optimizeExpr(expr: Expression): Expression = expr match {
+  private[optimization] def optimizeExpr(expr: Expression): Expression = expr match {
     case Binary(op, left, right) =>
       (optimizeExpr(left), optimizeExpr(right)) match {
         case (Literal(an: Number), Literal(bn: Number)) =>
@@ -156,7 +156,7 @@ object Optimizer {
     case _ => expr
   }
 
-  private def collectUsedVariables(statements: List[Statement]): Set[String] = {
+  private[optimization] def collectUsedVariables(statements: List[Statement]): Set[String] = {
     def collectExpr(expr: Expression): Set[String] = expr match {
       case ArrayAccess(a, b) => collectExpr(a) ++ collectExpr(b)
       case ArrayAccess(a, b) => collectExpr(a) ++ collectExpr(b)
@@ -180,7 +180,7 @@ object Optimizer {
     }.toSet
   }
 
-  private def hasSideEffect(expr: Expression): Boolean = expr match {
+  private[optimization] def hasSideEffect(expr: Expression): Boolean = expr match {
     case FunctionCall(_, _) => true
     case Binary(_, l, r) => hasSideEffect(l) || hasSideEffect(r)
     case Unary(_, e) => hasSideEffect(e)

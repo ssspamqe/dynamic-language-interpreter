@@ -7,7 +7,7 @@ import ru.innopolis.interpreter.lexer.{Code, Span, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleIndexAccess}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{Loop, _}
@@ -371,6 +371,26 @@ class OptimizerTest extends AnyFunSuite {
     ))
   }
 
+  test("optimize collection loop collection expression") {
+    val loop = CollectionLoop(
+      "item",
+      Binary(Code.PLUS, Literal(2), Literal(3)),
+      CodeBlock(List(ExpressionStatement(Literal("body"))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(loop)))
+    val optimized = result.statements.head.asInstanceOf[CollectionLoop]
+
+    optimized.collection shouldBe Literal(5.0)
+  }
+
+  test("division by zero should not be simplified") {
+    val expr = Binary(Code.DIVISION, Literal(5), Literal(0))
+    Optimizer.optimizeExpr(expr) shouldBe Binary(Code.DIVISION, Literal(5.0), Literal(0.0))
+  }
+
+  // Remove testing
+
   test("remove unused variable") {
     val tokens = List(
       token(Code.VAR), token(Code.IDENTIFIER, "x"),
@@ -500,5 +520,25 @@ class OptimizerTest extends AnyFunSuite {
     }.toSet
 
     declNames shouldBe Set()
+  }
+
+  test("collect used variables from nested structures") {
+    val stmt = ExpressionStatement(
+      FunctionCall(
+        Variable("f"),
+        List(ArrayAccess(Variable("arr"), Variable("x")), TupleIndexAccess(Variable("t"), 0))
+      )
+    )
+    val vars = Optimizer.collectUsedVariables(List(stmt))
+    vars shouldBe Set("f", "arr", "x", "t")
+  }
+
+
+  test("hasSideEffect should detect nested function calls") {
+    val expr = Binary(Code.PLUS,
+      FunctionCall(Variable("foo"), List(Literal(1))),
+      Literal(2)
+    )
+    Optimizer.hasSideEffect(expr) shouldBe true
   }
 }
