@@ -1,0 +1,28 @@
+name: tests.yml
+
+on:
+  pull_request:
+    branches: [ main, development ]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version: '22'
+          cache: 'sbt'
+
+      - name: Setup SBT
+        uses: sbt/setup-sbt@v1
+        with:
+          sbt-version: '1.11.4'
+
+      - name: Run SBT tests
+        run: sbt test
