@@ -303,4 +303,39 @@ class OptimizerTest extends AnyFunSuite {
 
     declNames shouldBe Set("x")
   }
+
+  test("keep variable if used in array access") {
+    val tokens = List(
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L), token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT), token(Code.IDENTIFIER, "x"), token(Code.SQUARE_BRACKET_RIGHT)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }.toSet
+
+    declNames shouldBe Set("x")
+  }
+
+
+  test("remove variable if not used in array access") {
+    val tokens = List(
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L), token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT), token(Code.INT_LITERAL, 1), token(Code.SQUARE_BRACKET_RIGHT)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }.toSet
+
+    declNames shouldBe Set()
+  }
 }
