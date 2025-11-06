@@ -5,12 +5,13 @@ import org.scalatest.matchers.should.Matchers._
 import ru.innopolis.interpreter.RegexLexer
 import ru.innopolis.interpreter.lexer.{Code, Span, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Variable
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleFieldAccess, TupleIndexAccess}
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.VariableAssignment
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{Loop, _}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 
 class OptimizerTest extends AnyFunSuite {
 
@@ -91,7 +92,7 @@ class OptimizerTest extends AnyFunSuite {
     val xorTokens = List(token(Code.TRUE), token(Code.XOR), token(Code.FALSE))
 
     val andResult = Optimizer.optimize(parse(andTokens))
-    val orResult  = Optimizer.optimize(parse(orTokens))
+    val orResult = Optimizer.optimize(parse(orTokens))
     val xorResult = Optimizer.optimize(parse(xorTokens))
 
     andResult shouldBe CodeBlock(List(
@@ -240,6 +241,136 @@ class OptimizerTest extends AnyFunSuite {
     )))
   }
 
+  test("optimize array element assignment") {
+    val stmt = ArrayElementAssignment(
+      Variable("arr"),
+      Binary(Code.PLUS, Literal(1), Literal(2)),
+      Binary(Code.MULTIPLICATION, Literal(3), Literal(4))
+    )
+
+    val block = CodeBlock(List(stmt))
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(
+      ArrayElementAssignment(Variable("arr"), Literal(3.0), Literal(12.0))
+    ))
+  }
+
+  test("optimize variable assignment with constant expression") {
+    val stmt = VariableAssignment("x", Binary(Code.PLUS, Literal(1), Literal(2)))
+    val block = CodeBlock(List(stmt))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(VariableAssignment("x", Literal(3.0))))
+  }
+
+  test("optimize variable declaration with constant expression") {
+    val block = CodeBlock(List(
+      VariableDeclaration("a", Binary(Code.MINUS, Literal(10), Literal(5))),
+      ExpressionStatement(Variable("a"))
+    ))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(
+      VariableDeclaration("a", Literal(5.0)),
+      ExpressionStatement(Variable("a"))
+    ))
+  }
+
+  test("optimize while loop with constant condition and expression inside") {
+    val whileLoop = WhileLoop(
+      Binary(Code.LESS, Literal(1), Literal(2)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.PLUS, Literal(2), Literal(3)))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(whileLoop)))
+
+    result shouldBe CodeBlock(List(
+      WhileLoop(Literal(true), CodeBlock(List(ExpressionStatement(Literal(5.0)))))
+    ))
+  }
+
+  test("optimize simple loop") {
+    val input = CodeBlock(List(
+      new Loop(CodeBlock(List(
+        ExpressionStatement(Binary(Code.PLUS, Literal(1), Literal(1)))
+      )))
+    ))
+
+    val result = Optimizer.optimize(input)
+    val loop = result.statements.head.asInstanceOf[Loop]
+
+    loop.body shouldBe CodeBlock(List(
+      ExpressionStatement(Literal(2.0))
+    ))
+  }
+
+  test("optimize if statement with constant condition and branches") {
+    val ifStmt = IfStatement(
+      Binary(Code.LESS, Literal(1), Literal(2)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.PLUS, Literal(2), Literal(3))))),
+      Some(CodeBlock(List(ExpressionStatement(Literal("else branch")))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(ifStmt)))
+
+    result shouldBe CodeBlock(List(
+      IfStatement(Literal(true),
+        CodeBlock(List(ExpressionStatement(Literal(5.0)))),
+        Some(CodeBlock(List(ExpressionStatement(Literal("else branch")))))
+      )
+    ))
+  }
+
+  test("optimize print statement with constant expression") {
+    val stmt = PrintStatement(List(Binary(Code.PLUS, Literal(4), Literal(1))))
+    val block = CodeBlock(List(stmt))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(PrintStatement(List(Literal(5.0)))))
+  }
+
+  test("optimize return statement with constant expression") {
+    val stmt = ReturnStatement(Some(Binary(Code.MULTIPLICATION, Literal(2), Literal(3))))
+    val block = CodeBlock(List(stmt))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(ReturnStatement(Some(Literal(6.0)))))
+  }
+
+  test("optimize collection loop") {
+    val collectionLoop = CollectionLoop(
+      "x",
+      Binary(Code.PLUS, Literal(1), Literal(2)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.MULTIPLICATION, Literal(2), Literal(3)))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(collectionLoop)))
+
+    result shouldBe CodeBlock(List(
+      CollectionLoop("x", Literal(3.0), CodeBlock(List(ExpressionStatement(Literal(6.0)))))
+    ))
+  }
+
+  test("optimize range loop") {
+    val rangeLoop = RangeLoop(
+      Some("i"),
+      Binary(Code.PLUS, Literal(1), Literal(2)),
+      Binary(Code.PLUS, Literal(3), Literal(4)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.PLUS, Literal(2), Literal(3)))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(rangeLoop)))
+
+    result shouldBe CodeBlock(List(
+      RangeLoop(Some("i"), Literal(3.0), Literal(7.0), CodeBlock(List(ExpressionStatement(Literal(5.0)))))
+    ))
+  }
+
   test("remove unused variable") {
     val tokens = List(
       token(Code.VAR), token(Code.IDENTIFIER, "x"),
@@ -252,7 +383,7 @@ class OptimizerTest extends AnyFunSuite {
 
     val hasY = result.statements.exists {
       case VariableDeclaration(name, _) => name == "y"
-      case VariableAssignment(name, _)  => name == "y"
+      case VariableAssignment(name, _) => name == "y"
       case _ => false
     }
 
@@ -274,7 +405,7 @@ class OptimizerTest extends AnyFunSuite {
       case VariableDeclaration(name, _) => name
     }
 
-    declNames should contain ("x")
+    declNames should contain("x")
   }
 
   test("remove unused variable but keep side effect") {
