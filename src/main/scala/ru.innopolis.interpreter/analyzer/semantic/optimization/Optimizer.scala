@@ -5,7 +5,9 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop._
 
 /*
 Possible Optimizations
@@ -58,8 +60,17 @@ object Optimizer {
   def optimize(e: CodeBlock): CodeBlock = {
     // evaluate constants
     val optimizedStatements = e.statements.foldLeft(List[Statement]())((ss, s) => s match {
-      case e: ExpressionStatement => ss :+ ExpressionStatement(optimizeExpr(e.expression))
+      case e: ArrayElementAssignment => ss :+ ArrayElementAssignment(optimizeExpr(e.target), optimizeExpr(e.index), optimizeExpr(e.value))
+      case e: VariableAssignment => ss :+ VariableAssignment(e.name, optimizeExpr(e.value))
       case e: VariableDeclaration => ss :+ VariableDeclaration(e.name, optimizeExpr(e.expression))
+      case e: CollectionLoop => ss :+ CollectionLoop(e.ident, optimizeExpr(e.collection), optimize(e.body))
+      case e: RangeLoop => ss :+ RangeLoop(e.ident, optimizeExpr(e.from), optimizeExpr(e.to), optimize(e.body))
+      case e: WhileLoop => ss :+ WhileLoop(optimizeExpr(e.condition), optimize(e.body))
+      case e: Loop => ss :+ new Loop(optimize(e.body))
+      case e: ExpressionStatement => ss :+ ExpressionStatement(optimizeExpr(e.expression))
+      case e: IfStatement => ss :+ IfStatement(optimizeExpr(e.condition), optimize(e.trueBranch), e.falseBranch.map(optimize))
+      case e: PrintStatement => ss :+ PrintStatement(e.expression.map(optimizeExpr))
+      case e: ReturnStatement => ss :+ ReturnStatement(e.expression.map(optimizeExpr))
       case _ => ss :+ s
     })
 
@@ -78,7 +89,7 @@ object Optimizer {
     CodeBlock(filteredStatements)
   }
 
-  private def optimizeExpr(expr: Expression): Expression = expr match {
+  private[optimization] def optimizeExpr(expr: Expression): Expression = expr match {
     case Binary(op, left, right) =>
       (optimizeExpr(left), optimizeExpr(right)) match {
         case (Literal(an: Number), Literal(bn: Number)) =>
@@ -134,7 +145,8 @@ object Optimizer {
         }
         case r => Unary(op, r)
       }
-
+    case ArrayAccess(t, i) =>
+      ArrayAccess(optimizeExpr(t), optimizeExpr(i))
     case ArrayLiteral(elements) =>
       ArrayLiteral(elements.map(optimizeExpr))
     case TupleLiteral(entries) =>
@@ -144,12 +156,13 @@ object Optimizer {
     case _ => expr
   }
 
-  private def collectUsedVariables(statements: List[Statement]): Set[String] = {
+  private[optimization] def collectUsedVariables(statements: List[Statement]): Set[String] = {
     def collectExpr(expr: Expression): Set[String] = expr match {
-      case ArrayAccess(Variable(name), _) => Set(name)
-      case FunctionCall(Variable(name), _) => Set(name)
-      case TupleFieldAccess(Variable(name), _) => Set(name)
-      case TupleIndexAccess(Variable(name), _) => Set(name)
+      case ArrayAccess(a, b) => collectExpr(a) ++ collectExpr(b)
+      case ArrayAccess(a, b) => collectExpr(a) ++ collectExpr(b)
+      case FunctionCall(a, b) => collectExpr(a) ++ b.flatMap(collectExpr(_))
+      case TupleFieldAccess(a, _) => collectExpr(a)
+      case TupleIndexAccess(a, _) => collectExpr(a)
       case Binary(_, l, r) => collectExpr(l) ++ collectExpr(r)
       case Unary(_, e) => collectExpr(e)
       case FunctionCall(target, args) =>
@@ -167,7 +180,7 @@ object Optimizer {
     }.toSet
   }
 
-  private def hasSideEffect(expr: Expression): Boolean = expr match {
+  private[optimization] def hasSideEffect(expr: Expression): Boolean = expr match {
     case FunctionCall(_, _) => true
     case Binary(_, l, r) => hasSideEffect(l) || hasSideEffect(r)
     case Unary(_, e) => hasSideEffect(e)
