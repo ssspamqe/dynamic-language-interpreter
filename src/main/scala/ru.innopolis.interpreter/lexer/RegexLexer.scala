@@ -1,12 +1,14 @@
 package ru.innopolis.interpreter
 
-import ru.innopolis.interpreter.lexer.{Code, Span, Token}
+import ru.innopolis.interpreter.lexer.{Code, Span, Token, TokensRefiner}
 
 import scala.util.matching.Regex
 
 class RegexLexer {
 
   private case class Rule(code: Code, pattern: Regex)
+
+  private val refiner = new TokensRefiner()
 
   private val rules: List[Rule] = {
     val keywords = Code.values().toList
@@ -73,11 +75,6 @@ class RegexLexer {
       }
     }
 
-    tokens.toList.filter(_.code != Code.SPACE)
-      .map(t => if (t.code == Code.SEMICOLON) t.copy(code = Code.NEWLINE) else t)
-      .foldRight(List.empty[Token[_]]) {
-        case (t, acc) if acc.headOption.exists(_.code == Code.NEWLINE) && t.code == Code.NEWLINE => acc
-        case (t, acc) => t :: acc
-      }
+    refiner.refineTokens(tokens.toList)
   }
 }

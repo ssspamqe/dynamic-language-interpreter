@@ -2,25 +2,15 @@ package ru.innopolis.interpreter.analyzer.semantic.optimization
 
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers._
-import ru.innopolis.interpreter.lexer.{Code, Span, Token}
-import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
+import ru.innopolis.interpreter.analyzer.semantic.utils.TestUtils._
+import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.Variable
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.VariableAssignment
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.{CodeBlock, ExpressionStatement}
 
 class OptimizerTest extends AnyFunSuite {
-
-  private val dummySpan = Span(0, 0, 0)
-
-  private def token(code: Code, value: Any = null): Token[_] =
-    Token(dummySpan, code, value)
-
-  private def parse(tokens: List[Token[_]]): CodeBlock = {
-    val parser = new AASTParser(new TokenStream(tokens))
-    parser.parse()
-  }
 
   test("sum constants") {
     val tokens = List(
@@ -89,7 +79,7 @@ class OptimizerTest extends AnyFunSuite {
     val xorTokens = List(token(Code.TRUE), token(Code.XOR), token(Code.FALSE))
 
     val andResult = Optimizer.optimize(parse(andTokens))
-    val orResult  = Optimizer.optimize(parse(orTokens))
+    val orResult = Optimizer.optimize(parse(orTokens))
     val xorResult = Optimizer.optimize(parse(xorTokens))
 
     andResult shouldBe CodeBlock(List(
@@ -220,7 +210,7 @@ class OptimizerTest extends AnyFunSuite {
 
     val hasY = result.statements.exists {
       case VariableDeclaration(name, _) => name == "y"
-      case VariableAssignment(name, _)  => name == "y"
+      case VariableAssignment(name, _) => name == "y"
       case _ => false
     }
 
@@ -242,7 +232,7 @@ class OptimizerTest extends AnyFunSuite {
       case VariableDeclaration(name, _) => name
     }
 
-    declNames should contain ("x")
+    declNames should contain("x")
   }
 
   test("remove unused variable but keep side effect") {
