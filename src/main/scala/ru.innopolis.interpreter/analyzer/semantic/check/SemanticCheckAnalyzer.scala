@@ -2,12 +2,13 @@ package ru.innopolis.interpreter.syntax.analyzer.semantic
 
 import ru.innopolis.interpreter.exception.SemanticCheckException
 import ru.innopolis.interpreter.lexer.Code
+import ru.innopolis.interpreter.lexer.Code._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.TypeCheck
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator.{ArrayType, BoolType, FuncType, TupleType}
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.indicator.TypeIndicator._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
@@ -197,8 +198,7 @@ class SemanticCheckAnalyzer {
   }
 
   private def inferType(t1: TypeIndicator, t2: TypeIndicator, op: Code): TypeIndicator = {
-    import TypeIndicator._
-    import ru.innopolis.interpreter.lexer.Code._
+
 
     (op, t1, t2) match {
 
