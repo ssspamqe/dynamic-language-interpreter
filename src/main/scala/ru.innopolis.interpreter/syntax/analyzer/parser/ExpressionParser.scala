@@ -205,11 +205,11 @@ class ExpressionParser(private val stream: TokenStream) {
       stream.expect(Code.ROUND_BRACKET_RIGHT)
     }
 
-    val bodyParser = new AASTParser(stream, inFunction = true, inLoop = false)
+    val bodyParser = new AASTParser(stream)
 
     if (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
-      val codeBlock = bodyParser.parseCodeBlock(Set(Code.END), functionContext = true, loopContext = false)
+      val codeBlock = bodyParser.parseCodeBlock(Set(Code.END))
       stream.expect(Code.END)
       FunctionLiteral(args.reverse, codeBlock)
     } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
