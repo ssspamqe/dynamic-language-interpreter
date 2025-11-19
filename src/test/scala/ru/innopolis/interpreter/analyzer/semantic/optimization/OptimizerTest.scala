@@ -3,27 +3,18 @@ package ru.innopolis.interpreter.analyzer.semantic.optimization
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers._
 import ru.innopolis.interpreter.RegexLexer
-import ru.innopolis.interpreter.lexer.{Code, Span, Token}
+import ru.innopolis.interpreter.analyzer.semantic.utils.TestUtils._
+import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleIndexAccess}
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Binary, Variable}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment.{ArrayElementAssignment, VariableAssignment}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
-import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{Loop, _}
+import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{CollectionLoop, Loop, RangeLoop, WhileLoop}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 
 class OptimizerTest extends AnyFunSuite {
-
-  private val dummySpan = Span(0, 0, 0)
-
-  private def token(code: Code, value: Any = null): Token[_] =
-    Token(dummySpan, code, value)
-
-  private def parse(tokens: List[Token[_]]): CodeBlock = {
-    val parser = new AASTParser(new TokenStream(tokens))
-    parser.parse()
-  }
 
   test("sum constants") {
     val tokens = List(
