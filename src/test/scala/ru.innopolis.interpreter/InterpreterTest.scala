@@ -174,9 +174,15 @@ class InterpreterTest extends AnyFunSuite {
   }
 
   test("interpret real numbers") {
-    val code = "var x := 3.14\nprint x\nprint x + 1.0"
+    val code =
+      """var x := 3.14
+        |print x
+        |print "\n"
+        |print x + 1.0""".stripMargin
     val output = interpretCode(code)
-    assert(output == "3.144.14")
+    assert(output ==
+      """3.14
+        |4.140000000000001""".stripMargin)
   }
 
   test("interpret boolean literals") {
