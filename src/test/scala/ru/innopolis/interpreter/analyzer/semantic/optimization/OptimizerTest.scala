@@ -198,6 +198,186 @@ class OptimizerTest extends AnyFunSuite {
     value shouldBe 5.5 +- 1e-6
   }
 
+  test("evaluate constants in array index") {
+    val code = "arr[1 + 2 + 3]"
+
+    val lexer = new RegexLexer()
+    val tokens = lexer.tokenize(code)
+    val stream = new TokenStream(tokens)
+    val parser = new AASTParser(stream)
+    val expression = parser.parse()
+    val result = Optimizer.optimize(expression)
+
+    result shouldBe CodeBlock(List(ExpressionStatement(
+      ArrayAccess(Variable("arr"), Literal(6))
+    )))
+  }
+
+  test("evaluate constants in args of function call") {
+    val code = "f(1 + 2 + 3)"
+
+    val lexer = new RegexLexer()
+    val tokens = lexer.tokenize(code)
+    val stream = new TokenStream(tokens)
+    val parser = new AASTParser(stream)
+    val expression = parser.parse()
+    val result = Optimizer.optimize(expression)
+
+    result shouldBe CodeBlock(List(ExpressionStatement(
+      FunctionCall(Variable("f"), List(Literal(6)))
+    )))
+  }
+
+  test("optimize array element assignment") {
+    val stmt = ArrayElementAssignment(
+      Variable("arr"),
+      Binary(Code.PLUS, Literal(1), Literal(2)),
+      Binary(Code.MULTIPLICATION, Literal(3), Literal(4))
+    )
+
+    val block = CodeBlock(List(stmt))
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(
+      ArrayElementAssignment(Variable("arr"), Literal(3.0), Literal(12.0))
+    ))
+  }
+
+  test("optimize variable assignment with constant expression") {
+    val stmt = VariableAssignment("x", Binary(Code.PLUS, Literal(1), Literal(2)))
+    val block = CodeBlock(List(stmt))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(VariableAssignment("x", Literal(3.0))))
+  }
+
+  test("optimize variable declaration with constant expression") {
+    val block = CodeBlock(List(
+      VariableDeclaration("a", Binary(Code.MINUS, Literal(10), Literal(5))),
+      ExpressionStatement(Variable("a"))
+    ))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(
+      VariableDeclaration("a", Literal(5.0)),
+      ExpressionStatement(Variable("a"))
+    ))
+  }
+
+  test("optimize while loop with constant condition and expression inside") {
+    val whileLoop = WhileLoop(
+      Binary(Code.LESS, Literal(1), Literal(2)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.PLUS, Literal(2), Literal(3)))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(whileLoop)))
+
+    result shouldBe CodeBlock(List(
+      WhileLoop(Literal(true), CodeBlock(List(ExpressionStatement(Literal(5.0)))))
+    ))
+  }
+
+  test("optimize simple loop") {
+    val input = CodeBlock(List(
+      new Loop(CodeBlock(List(
+        ExpressionStatement(Binary(Code.PLUS, Literal(1), Literal(1)))
+      )))
+    ))
+
+    val result = Optimizer.optimize(input)
+    val loop = result.statements.head.asInstanceOf[Loop]
+
+    loop.body shouldBe CodeBlock(List(
+      ExpressionStatement(Literal(2.0))
+    ))
+  }
+
+  test("optimize if statement with constant condition and branches") {
+    val ifStmt = IfStatement(
+      Binary(Code.LESS, Literal(1), Literal(2)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.PLUS, Literal(2), Literal(3))))),
+      Some(CodeBlock(List(ExpressionStatement(Literal("else branch")))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(ifStmt)))
+
+    result shouldBe CodeBlock(List(
+      IfStatement(Literal(true),
+        CodeBlock(List(ExpressionStatement(Literal(5.0)))),
+        Some(CodeBlock(List(ExpressionStatement(Literal("else branch")))))
+      )
+    ))
+  }
+
+  test("optimize print statement with constant expression") {
+    val stmt = PrintStatement(List(Binary(Code.PLUS, Literal(4), Literal(1))))
+    val block = CodeBlock(List(stmt))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(PrintStatement(List(Literal(5.0)))))
+  }
+
+  test("optimize return statement with constant expression") {
+    val stmt = ReturnStatement(Some(Binary(Code.MULTIPLICATION, Literal(2), Literal(3))))
+    val block = CodeBlock(List(stmt))
+
+    val result = Optimizer.optimize(block)
+
+    result shouldBe CodeBlock(List(ReturnStatement(Some(Literal(6.0)))))
+  }
+
+  test("optimize collection loop") {
+    val collectionLoop = CollectionLoop(
+      "x",
+      Binary(Code.PLUS, Literal(1), Literal(2)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.MULTIPLICATION, Literal(2), Literal(3)))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(collectionLoop)))
+
+    result shouldBe CodeBlock(List(
+      CollectionLoop("x", Literal(3.0), CodeBlock(List(ExpressionStatement(Literal(6.0)))))
+    ))
+  }
+
+  test("optimize range loop") {
+    val rangeLoop = RangeLoop(
+      Some("i"),
+      Binary(Code.PLUS, Literal(1), Literal(2)),
+      Binary(Code.PLUS, Literal(3), Literal(4)),
+      CodeBlock(List(ExpressionStatement(Binary(Code.PLUS, Literal(2), Literal(3)))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(rangeLoop)))
+
+    result shouldBe CodeBlock(List(
+      RangeLoop(Some("i"), Literal(3.0), Literal(7.0), CodeBlock(List(ExpressionStatement(Literal(5.0)))))
+    ))
+  }
+
+  test("optimize collection loop collection expression") {
+    val loop = CollectionLoop(
+      "item",
+      Binary(Code.PLUS, Literal(2), Literal(3)),
+      CodeBlock(List(ExpressionStatement(Literal("body"))))
+    )
+
+    val result = Optimizer.optimize(CodeBlock(List(loop)))
+    val optimized = result.statements.head.asInstanceOf[CollectionLoop]
+
+    optimized.collection shouldBe Literal(5.0)
+  }
+
+  test("division by zero should not be simplified") {
+    val expr = Binary(Code.DIVISION, Literal(5), Literal(0))
+    Optimizer.optimizeExpr(expr) shouldBe Binary(Code.DIVISION, Literal(5.0), Literal(0.0))
+  }
+
+  // Remove testing
+
   test("remove unused variable") {
     val tokens = List(
       token(Code.VAR), token(Code.IDENTIFIER, "x"),
@@ -292,5 +472,60 @@ class OptimizerTest extends AnyFunSuite {
     }.toSet
 
     declNames shouldBe Set("x")
+  }
+
+  test("keep variable if used in array access") {
+    val tokens = List(
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L), token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT), token(Code.IDENTIFIER, "x"), token(Code.SQUARE_BRACKET_RIGHT)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }.toSet
+
+    declNames shouldBe Set("x")
+  }
+
+
+  test("remove variable if not used in array access") {
+    val tokens = List(
+      token(Code.VAR), token(Code.IDENTIFIER, "x"),
+      token(Code.ASSIGNMENT), token(Code.INT_LITERAL, 2L), token(Code.NEWLINE),
+      token(Code.IDENTIFIER, "arr"),
+      token(Code.SQUARE_BRACKET_LEFT), token(Code.INT_LITERAL, 1), token(Code.SQUARE_BRACKET_RIGHT)
+    )
+
+    val result = Optimizer.optimize(parse(tokens))
+
+    val declNames = result.statements.collect {
+      case VariableDeclaration(name, _) => name
+    }.toSet
+
+    declNames shouldBe Set()
+  }
+
+  test("collect used variables from nested structures") {
+    val stmt = ExpressionStatement(
+      FunctionCall(
+        Variable("f"),
+        List(ArrayAccess(Variable("arr"), Variable("x")), TupleIndexAccess(Variable("t"), 0))
+      )
+    )
+    val vars = Optimizer.collectUsedVariables(List(stmt))
+    vars shouldBe Set("f", "arr", "x", "t")
+  }
+
+
+  test("hasSideEffect should detect nested function calls") {
+    val expr = Binary(Code.PLUS,
+      FunctionCall(Variable("foo"), List(Literal(1))),
+      Literal(2)
+    )
+    Optimizer.hasSideEffect(expr) shouldBe true
   }
 }
