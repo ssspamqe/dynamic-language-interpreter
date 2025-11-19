@@ -15,6 +15,11 @@ import scala.collection.mutable
 import scala.util.control.Breaks._
 
 /**
+ * Exception used to exit from a loop
+ */
+private class LoopExitException extends Exception
+
+/**
  * Interpreter that executes the AST directly
  */
 class Interpreter {
@@ -46,7 +51,7 @@ class Interpreter {
     stmt match {
       case PrintStatement(expressions) =>
         val values = expressions.map(evaluateExpression)
-        println(values.mkString(" "))
+        print(values.mkString(" "))
 
       case VariableDeclaration(name, expr) =>
         val value = evaluateExpression(expr)
@@ -86,7 +91,11 @@ class Interpreter {
               case _ => throw new RuntimeException("While condition must be a boolean")
             }
             if (!condValue) break
-            executeBlock(body, environment.createChild())
+            try {
+              executeBlock(body, environment.createChild())
+            } catch {
+              case _: LoopExitException => break
+            }
           }
         }
 
@@ -101,31 +110,44 @@ class Interpreter {
           case i: Int => i.toLong
           case _ => throw new RuntimeException("Range loop 'to' must be an integer")
         }
-        val childEnv = environment.createChild()
         breakable {
           for (i <- fromValue to toValue) {
             if (shouldExit || returnValue.isDefined) break
+            val childEnv = environment.createChild()
             ident.foreach(name => childEnv.defineVariable(name, i))
-            executeBlock(body, childEnv)
+            try {
+              executeBlock(body, childEnv)
+            } catch {
+              case _: LoopExitException => break
+            }
           }
         }
 
       case CollectionLoop(ident, collection, body) =>
         val coll = evaluateExpression(collection)
-        val childEnv = environment.createChild()
         breakable {
           coll match {
             case arr: Array[Any] =>
               for (elem <- arr) {
                 if (shouldExit || returnValue.isDefined) break
+                val childEnv = environment.createChild()
                 childEnv.defineVariable(ident, elem)
-                executeBlock(body, childEnv)
+                try {
+                  executeBlock(body, childEnv)
+                } catch {
+                  case _: LoopExitException => break
+                }
               }
             case list: List[Any] =>
               for (elem <- list) {
                 if (shouldExit || returnValue.isDefined) break
+                val childEnv = environment.createChild()
                 childEnv.defineVariable(ident, elem)
-                executeBlock(body, childEnv)
+                try {
+                  executeBlock(body, childEnv)
+                } catch {
+                  case _: LoopExitException => break
+                }
               }
             case _ => throw new RuntimeException("Collection loop requires an array or list")
           }
@@ -135,7 +157,11 @@ class Interpreter {
         breakable {
           while (true) {
             if (shouldExit || returnValue.isDefined) break
-            executeBlock(loop.body, environment.createChild())
+            try {
+              executeBlock(loop.body, environment.createChild())
+            } catch {
+              case _: LoopExitException => break
+            }
           }
         }
 
@@ -143,7 +169,7 @@ class Interpreter {
         returnValue = expr.map(evaluateExpression)
 
       case ExitStatement() =>
-        shouldExit = true
+        throw new LoopExitException()
 
       case ExpressionStatement(expr) =>
         evaluateExpression(expr) // Evaluate but don't use result

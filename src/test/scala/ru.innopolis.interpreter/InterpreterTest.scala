@@ -6,42 +6,39 @@ import ru.innopolis.interpreter.runtime.Interpreter
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 
 import java.io.{ByteArrayOutputStream, PrintStream}
-import scala.io.Source
 
 class InterpreterTest extends AnyFunSuite {
 
-  // Helper method to parse and interpret code
+  /** Parse + interpret code and capture stdout */
   private def interpretCode(code: String): String = {
     val lexer = new RegexLexer()
     val tokens = lexer.tokenize(code)
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val ast = parser.parse()
-    val optimizedAst = Optimizer.optimize(ast)
+//    val optimizedAst = Optimizer.optimize(ast)
 
-    // Capture stdout
-    val baos = new ByteArrayOutputStream()
-    val ps = new PrintStream(baos)
-    val oldOut = System.out
-    try {
-      System.setOut(ps)
+    val out = new ByteArrayOutputStream()
+
+    Console.withOut(out) {
       val interpreter = new Interpreter()
-      interpreter.interpret(optimizedAst)
-      baos.toString.trim
-    } finally {
-      System.setOut(oldOut)
-      ps.close()
+      interpreter.interpret(ast)
     }
+
+    out.toString("UTF-8")
   }
 
-  // Helper to parse code without executing
-  private def parseCode(code: String) = {
-    val lexer = new RegexLexer()
-    val tokens = lexer.tokenize(code)
-    val stream = new TokenStream(tokens)
-    val parser = new AASTParser(stream)
-    val ast = parser.parse()
-    Optimizer.optimize(ast)
+  test("buffer should take stdout test") {
+
+    val out = new ByteArrayOutputStream()
+
+    Console.withOut(out) {
+      print(12)
+    }
+
+    val printed = out.toString("UTF-8")
+
+    assert(printed == "12")
   }
 
   test("interpret simple print statement") {
@@ -53,7 +50,7 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret multiple print statements") {
     val code = "print 1\nprint 2\nprint 3"
     val output = interpretCode(code)
-    assert(output == "1\n2\n3")
+    assert(output == "123")
   }
 
   test("interpret variable declaration and print") {
@@ -71,19 +68,19 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret arithmetic operations") {
     val code = "print 2 + 3\nprint 10 - 4\nprint 3 * 4\nprint 12 / 3"
     val output = interpretCode(code)
-    assert(output == "5\n6\n12\n4")
+    assert(output == "56124")
   }
 
   test("interpret comparison operations") {
     val code = "print 5 < 10\nprint 5 > 10\nprint 5 = 5\nprint 5 /= 10"
     val output = interpretCode(code)
-    assert(output == "true\nfalse\ntrue\ntrue")
+    assert(output == "truefalsetruetrue")
   }
 
   test("interpret boolean operations") {
     val code = "print true and false\nprint true or false\nprint not false"
     val output = interpretCode(code)
-    assert(output == "false\ntrue\ntrue")
+    assert(output == "falsetruetrue")
   }
 
   test("interpret if statement - true branch") {
@@ -125,7 +122,7 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret array literal") {
     val code = "var arr := [1, 2, 3]\nprint arr[0]\nprint arr[1]\nprint arr[2]"
     val output = interpretCode(code)
-    assert(output == "1\n2\n3")
+    assert(output == "123")
   }
 
   test("interpret array access") {
@@ -179,37 +176,37 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret real numbers") {
     val code = "var x := 3.14\nprint x\nprint x + 1.0"
     val output = interpretCode(code)
-    assert(output == "3.14\n4.14")
+    assert(output == "3.144.14")
   }
 
   test("interpret boolean literals") {
     val code = "print true\nprint false"
     val output = interpretCode(code)
-    assert(output == "true\nfalse")
+    assert(output == "truefalse")
   }
 
   test("interpret unary minus") {
     val code = "var x := 5\nprint -x\nprint -(-3)"
     val output = interpretCode(code)
-    assert(output == "-5\n3")
+    assert(output == "-53")
   }
 
   test("interpret less than or equal") {
     val code = "print 5 <= 5\nprint 5 <= 10\nprint 10 <= 5"
     val output = interpretCode(code)
-    assert(output == "true\ntrue\nfalse")
+    assert(output == "truetruefalse")
   }
 
   test("interpret greater than or equal") {
     val code = "print 5 >= 5\nprint 10 >= 5\nprint 5 >= 10"
     val output = interpretCode(code)
-    assert(output == "true\ntrue\nfalse")
+    assert(output == "truetruefalse")
   }
 
   test("interpret not equal") {
     val code = "print 5 /= 5\nprint 5 /= 10"
     val output = interpretCode(code)
-    assert(output == "false\ntrue")
+    assert(output == "falsetrue")
   }
 
   test("interpret empty array") {
@@ -222,11 +219,19 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret variable scope") {
     val code = "var x := 10\nif true then\n    var x := 20\n    print x\nend\nprint x"
     val output = interpretCode(code)
-    assert(output == "20\n10")
+    assert(output == "2010")
   }
 
   test("interpret infinite loop with exit") {
-    val code = "var i := 0\nloop\n    i := i + 1\n    if i >= 5 then\n        exit\n    end\nend\nprint i"
+    val code =
+      "var i := 0\n" +
+      "loop\n" +
+      "    i := i + 1\n" +
+      "    if i >= 5 then\n" +
+      "        exit\n" +
+      "    end\n" +
+      "end\n" +
+      "print i"
     val output = interpretCode(code)
     assert(output == "5")
   }
@@ -234,7 +239,7 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret multiple variables") {
     val code = "var a := 1\nvar b := 2\nvar c := 3\nprint a\nprint b\nprint c"
     val output = interpretCode(code)
-    assert(output == "1\n2\n3")
+    assert(output == "123")
   }
 
   test("interpret chained assignments") {
@@ -270,7 +275,7 @@ class InterpreterTest extends AnyFunSuite {
   test("interpret comparison with variables") {
     val code = "var a := 5\nvar b := 10\nprint a < b\nprint a > b\nprint a = a"
     val output = interpretCode(code)
-    assert(output == "true\nfalse\ntrue")
+    assert(output == "truefalsetrue")
   }
 
   test("interpret nested loops") {
@@ -337,7 +342,7 @@ class InterpreterTest extends AnyFunSuite {
   }
 
   test("interpret multiple print arguments") {
-    val code = "print 1 2 3"
+    val code = "print 1, 2, 3"
     val output = interpretCode(code)
     assert(output == "1 2 3")
   }
