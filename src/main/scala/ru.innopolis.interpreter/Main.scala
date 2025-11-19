@@ -1,6 +1,7 @@
 package ru.innopolis.interpreter
 
 
+import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 
 import scala.io.Source
@@ -15,9 +16,9 @@ object Main {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val expression = parser.parse()
+    val analyzedExpression = Optimizer.optimize(expression)
 
-    CaseClassPrinter.printCaseClass(expression)
-    println(expression)
+    CaseClassPrinter.printCaseClass(analyzedExpression)
   }
 
 }
