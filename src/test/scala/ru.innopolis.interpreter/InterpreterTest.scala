@@ -428,9 +428,11 @@ class InterpreterTest extends AnyFunSuite {
         |var c := []
         |c[10] := 1
         |print c[1]
+        |print c[9]
+        |print c[10]
         |""".stripMargin
     val output = interpretCode(code)
-    assert(output == "None")
+    assert(output == "001")
   }
 }
 

@@ -12,6 +12,7 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.Varia
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop.{CollectionLoop, Loop, RangeLoop, WhileLoop}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
 /**
@@ -62,13 +63,17 @@ class Interpreter {
         environment.setVariable(name, value)
 
       case ArrayElementAssignment(target, index, value) =>
-        val arr = evaluateExpression(target).asInstanceOf[Array[Any]]
+        val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
         val idx = evaluateExpression(index) match {
           case l: Long => l.toInt
           case i: Int => i
           case _ => throw new RuntimeException("Array index must be an integer")
         }
         val valValue = evaluateExpression(value)
+        // Автоматически расширяем массив если нужно
+        if (idx > arr.length) {
+          arr ++= ArrayBuffer.fill(idx - arr.length)(0)
+        }
         arr(idx - 1) = valValue
 
       case IfStatement(condition, trueBranch, falseBranch) =>
@@ -127,7 +132,7 @@ class Interpreter {
         val coll = evaluateExpression(collection)
         breakable {
           coll match {
-            case arr: Array[Any] =>
+            case arr: ArrayBuffer[Any] =>
               for (elem <- arr) {
                 if (shouldExit || returnValue.isDefined) break
                 val childEnv = environment.createChild()
@@ -197,23 +202,26 @@ class Interpreter {
         callFunction(func, argValues)
 
       case ArrayAccess(target, index) =>
-        val arr = evaluateExpression(target).asInstanceOf[Array[Any]]
+        val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
         val idx = evaluateExpression(index) match {
           case l: Long => l.toInt
           case i: Int => i
           case _ => throw new RuntimeException("Array index must be an integer")
         }
+        if (idx > arr.length) {
+          throw new RuntimeException(s"Array index $idx out of bounds for array of length ${arr.length}")
+        }
         arr(idx - 1)
 
       case ArrayLiteral(elements) =>
-        elements.map(evaluateExpression).toArray
+        ArrayBuffer.from(elements.map(evaluateExpression))
 
       case TupleLiteral(elements) =>
         val map = mutable.Map[String, Any]()
         var index = 1
         for (entry <- elements) {
           val value = evaluateExpression(entry.value)
-          entry.key.map(key => map(key) = value)
+          entry.key.foreach(key => map(key) = value)
           map(index.toString) = value
           index += 1
         }
@@ -228,46 +236,47 @@ class Interpreter {
         tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
 
       case FunctionLiteral(args, body) =>
+        val capturedEnv = environment // Захватываем контекст
         (argValues: List[Any]) => {
           if (argValues.length != args.length) {
             throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
           }
-          val funcEnv = environment.createChild()
+          val funcEnv = capturedEnv.createChild()
           for ((arg, value) <- args.zip(argValues)) {
             funcEnv.defineVariable(arg.value, value)
           }
           val oldReturn = returnValue
           val oldExit = shouldExit
+          val oldEnv = environment
           returnValue = None
           shouldExit = false
+          environment = funcEnv
           try {
             executeBlock(body, funcEnv)
             returnValue.getOrElse(None)
           } finally {
             returnValue = oldReturn
             shouldExit = oldExit
+            environment = oldEnv
           }
         }
 
       case LambdaLiteral(args, body) =>
+        val capturedEnv = environment // Захватываем контекст
         (argValues: List[Any]) => {
           if (argValues.length != args.length) {
             throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
           }
-          val funcEnv = environment.createChild()
+          val funcEnv = capturedEnv.createChild()
           for ((arg, value) <- args.zip(argValues)) {
             funcEnv.defineVariable(arg.value, value)
           }
-          val oldReturn = returnValue
-          val oldExit = shouldExit
-          returnValue = None
-          shouldExit = false
+          val oldEnv = environment
+          environment = funcEnv
           try {
-            executeBlock(CodeBlock(List(ReturnStatement(Some(body)))), funcEnv)
-            returnValue.getOrElse(None)
+            evaluateExpression(body)
           } finally {
-            returnValue = oldReturn
-            shouldExit = oldExit
+            environment = oldEnv
           }
         }
 
@@ -289,16 +298,15 @@ class Interpreter {
           case (l: Double, r: Long) => l + r
           case (l: String, r: Any) => l + r.toString
           case (l: Any, r: String) => l.toString + r
-          case (l: Array[Any], r: Array[Any]) => (l ++ r).toArray
+          case (l: ArrayBuffer[Any], r: ArrayBuffer[Any]) => l ++ r
           case (l: List[Any], r: List[Any]) => l ::: r
           case (l: Map[String, Any], r: Map[String, Any]) => {
             val length = l.map { case (k, v) => k.toIntOption.getOrElse(0) }.max
             l ++ r.map { case (k, v) => (k.toIntOption.map(k => (k + length).toString).getOrElse(k), v) }
           }
-          case (l: Seq[Any], r: Seq[Any]) => l ++ r
+          case (l: mutable.Seq[Any], r: mutable.Seq[Any]) => l ++ r
           case _ => throw new RuntimeException(s"Cannot add $left and $right")
         }
-
 
       case Code.MINUS =>
         (left, right) match {
@@ -411,10 +419,9 @@ class Interpreter {
       case TypeIndicator.BoolType => value.isInstanceOf[Boolean]
       case TypeIndicator.StringType => value.isInstanceOf[String]
       case TypeIndicator.NoneType => value == None
-      case TypeIndicator.ArrayType => value.isInstanceOf[Array[Any]] || value.isInstanceOf[List[Any]]
+      case TypeIndicator.ArrayType => value.isInstanceOf[ArrayBuffer[Any]] || value.isInstanceOf[List[Any]]
       case TypeIndicator.TupleType => value.isInstanceOf[Map[_, _]]
       case TypeIndicator.FuncType => value.isInstanceOf[List[Any] => Any]
     }
   }
 }
-
