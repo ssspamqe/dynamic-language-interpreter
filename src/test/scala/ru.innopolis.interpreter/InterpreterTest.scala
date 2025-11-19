@@ -410,7 +410,27 @@ class InterpreterTest extends AnyFunSuite {
         |print c(1, 2)
         |""".stripMargin
     val output = interpretCode(code)
-    assert(output == "1 2 3 41 3")
+    assert(output == "3")
+  }
+
+  test("function evaluate") {
+    val code =
+      """
+        |var c := func(a, b) is return a + b end
+        |print c(1, 2)
+        |""".stripMargin
+    val output = interpretCode(code)
+    assert(output == "3")
+  }
+  test("unexistent indexes in arrays") {
+    val code =
+      """
+        |var c := []
+        |c[10] := 1
+        |print c[1]
+        |""".stripMargin
+    val output = interpretCode(code)
+    assert(output == "None")
   }
 }
 

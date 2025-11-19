@@ -258,7 +258,17 @@ class Interpreter {
           for ((arg, value) <- args.zip(argValues)) {
             funcEnv.defineVariable(arg.value, value)
           }
-          evaluateExpression(body)
+          val oldReturn = returnValue
+          val oldExit = shouldExit
+          returnValue = None
+          shouldExit = false
+          try {
+            executeBlock(CodeBlock(List(ReturnStatement(Some(body)))), funcEnv)
+            returnValue.getOrElse(None)
+          } finally {
+            returnValue = oldReturn
+            shouldExit = oldExit
+          }
         }
 
       case TypeCheck(expression, typeIndicator) =>
@@ -282,8 +292,8 @@ class Interpreter {
           case (l: Array[Any], r: Array[Any]) => (l ++ r).toArray
           case (l: List[Any], r: List[Any]) => l ::: r
           case (l: Map[String, Any], r: Map[String, Any]) => {
-            val length = l.map{case (k, v) => k.toIntOption.getOrElse(0)}.max
-            l ++ r.map{case (k, v) =>  (k.toIntOption.map(k => (k + length).toString).getOrElse(k), v) }
+            val length = l.map { case (k, v) => k.toIntOption.getOrElse(0) }.max
+            l ++ r.map { case (k, v) => (k.toIntOption.map(k => (k + length).toString).getOrElse(k), v) }
           }
           case (l: Seq[Any], r: Seq[Any]) => l ++ r
           case _ => throw new RuntimeException(s"Cannot add $left and $right")
