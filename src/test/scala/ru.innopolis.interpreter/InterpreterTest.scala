@@ -120,25 +120,25 @@ class InterpreterTest extends AnyFunSuite {
   }
 
   test("interpret array literal") {
-    val code = "var arr := [1, 2, 3]\nprint arr[0]\nprint arr[1]\nprint arr[2]"
+    val code = "var arr := [1, 2, 3]\nprint arr[1]\nprint arr[2]\nprint arr[3]"
     val output = interpretCode(code)
     assert(output == "123")
   }
 
   test("interpret array access") {
-    val code = "var arr := [10, 20, 30]\nvar x := arr[1]\nprint x"
+    val code = "var arr := [10, 20, 30]\nvar x := arr[2]\nprint x"
     val output = interpretCode(code)
     assert(output == "20")
   }
 
   test("interpret array element assignment") {
-    val code = "var arr := [1, 2, 3]\narr[1] := 99\nprint arr[1]"
+    val code = "var arr := [1, 2, 3]\narr[2] := 99\nprint arr[2]"
     val output = interpretCode(code)
     assert(output == "99")
   }
 
   test("interpret collection loop") {
-    val code = "var arr := [4, 1, 9, 2]\nvar max := arr[0]\nfor x in arr loop\n    if x > max then\n        max := x\n    end\nend\nprint max"
+    val code = "var arr := [4, 1, 9, 2]\nvar max := arr[1]\nfor x in arr loop\n    if x > max then\n        max := x\n    end\nend\nprint max"
     val output = interpretCode(code)
     assert(output == "9")
   }
@@ -297,7 +297,7 @@ class InterpreterTest extends AnyFunSuite {
   }
 
   test("interpret example 2 - search maximum of array") {
-    val code = "var arr := [4, 1, 9, 2]\nvar max := arr[0]\nfor x in arr loop\n    if x > max then\n        max := x\n    end\nend\nprint max"
+    val code = "var arr := [4, 1, 9, 2]\nvar max := arr[1]\nfor x in arr loop\n    if x > max then\n        max := x\n    end\nend\nprint max"
     val output = interpretCode(code)
     assert(output == "9")
   }
@@ -376,6 +376,41 @@ class InterpreterTest extends AnyFunSuite {
     val output = interpretCode(code)
     // Should not execute loop body if from > to
     assert(output == "0")
+  }
+
+  test("concat arrays") {
+    val code =
+      """
+        |var a := [1, 2]
+        |var b := [3, 4]
+        |var c := a + b
+        |print c[4]
+        |""".stripMargin
+    val output = interpretCode(code)
+    assert(output == "4")
+  }
+
+  test("concat tuple") {
+    val code =
+      """
+        |var a := {a := 1, 2}
+        |var b := {c := 3, 4}
+        |var c := a + b
+        |print c.1, c.2, c.3, c.4
+        |print c.a, c.c
+        |""".stripMargin
+    val output = interpretCode(code)
+    assert(output == "1 2 3 41 3")
+  }
+
+  test("lambda evaluate") {
+    val code =
+      """
+        |var c := func(a, b) => a + b
+        |print c(1, 2)
+        |""".stripMargin
+    val output = interpretCode(code)
+    assert(output == "1 2 3 41 3")
   }
 }
 

@@ -69,7 +69,7 @@ class Interpreter {
           case _ => throw new RuntimeException("Array index must be an integer")
         }
         val valValue = evaluateExpression(value)
-        arr(idx) = valValue
+        arr(idx - 1) = valValue
 
       case IfStatement(condition, trueBranch, falseBranch) =>
         val condValue = evaluateExpression(condition) match {
@@ -203,20 +203,18 @@ class Interpreter {
           case i: Int => i
           case _ => throw new RuntimeException("Array index must be an integer")
         }
-        arr(idx)
+        arr(idx - 1)
 
       case ArrayLiteral(elements) =>
         elements.map(evaluateExpression).toArray
 
       case TupleLiteral(elements) =>
         val map = mutable.Map[String, Any]()
-        var index = 0
+        var index = 1
         for (entry <- elements) {
           val value = evaluateExpression(entry.value)
-          entry.key match {
-            case Some(key) => map(key) = value
-            case None => map(index.toString) = value
-          }
+          entry.key.map(key => map(key) = value)
+          map(index.toString) = value
           index += 1
         }
         map.toMap
@@ -263,18 +261,6 @@ class Interpreter {
           evaluateExpression(body)
         }
 
-      case Lambda(params, body) =>
-        (argValues: List[Any]) => {
-          if (argValues.length != params.length) {
-            throw new RuntimeException(s"Expected ${params.length} arguments, got ${argValues.length}")
-          }
-          val funcEnv = environment.createChild()
-          for ((param, value) <- params.zip(argValues)) {
-            funcEnv.defineVariable(param, value)
-          }
-          evaluateExpression(body)
-        }
-
       case TypeCheck(expression, typeIndicator) =>
         val value = evaluateExpression(expression)
         checkType(value, typeIndicator)
@@ -293,8 +279,16 @@ class Interpreter {
           case (l: Double, r: Long) => l + r
           case (l: String, r: Any) => l + r.toString
           case (l: Any, r: String) => l.toString + r
+          case (l: Array[Any], r: Array[Any]) => (l ++ r).toArray
+          case (l: List[Any], r: List[Any]) => l ::: r
+          case (l: Map[String, Any], r: Map[String, Any]) => {
+            val length = l.map{case (k, v) => k.toIntOption.getOrElse(0)}.max
+            l ++ r.map{case (k, v) =>  (k.toIntOption.map(k => (k + length).toString).getOrElse(k), v) }
+          }
+          case (l: Seq[Any], r: Seq[Any]) => l ++ r
           case _ => throw new RuntimeException(s"Cannot add $left and $right")
         }
+
 
       case Code.MINUS =>
         (left, right) match {

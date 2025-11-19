@@ -10,7 +10,8 @@ class Environment(parent: Option[Environment] = None) {
   private val functions = mutable.Map[String, Any]()
 
   def getVariable(name: String): Any = {
-    variables.get(name) match {
+    val a = variables.get(name)
+    a match {
       case Some(value) => value
       case None => parent match {
         case Some(p) => p.getVariable(name)
