@@ -176,6 +176,14 @@ object Optimizer {
     statements.flatMap {
       case ExpressionStatement(expr) => collectExpr(expr)
       case VariableDeclaration(_, expr) => collectExpr(expr)
+      case ArrayElementAssignment(t, i, v) => collectExpr(t) ++ collectExpr(i) ++ collectExpr(v)
+      case VariableAssignment(name, exp) => Set(name) ++ collectExpr(exp)
+      case CollectionLoop(_, c, body) => collectExpr(c) ++ collectUsedVariables(body.statements)
+      case RangeLoop(_, f, t, body) => collectExpr(f) ++ collectExpr(t) ++ collectUsedVariables(body.statements)
+      case WhileLoop(c, body) => collectExpr(c) ++ collectUsedVariables(body.statements)
+      case Loop(body) => collectUsedVariables(body.statements)
+      case IfStatement(c, t, f) => collectExpr(c) ++ collectUsedVariables(t.statements) ++ f.map(f => collectUsedVariables(f.statements)).getOrElse(Set.empty)
+      case PrintStatement(e) => e.flatMap(collectExpr).toSet
       case _ => Set.empty
     }.toSet
   }
