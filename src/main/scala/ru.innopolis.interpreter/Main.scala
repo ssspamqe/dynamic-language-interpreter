@@ -27,7 +27,6 @@ object Main {
     val parser = new AASTParser(stream)
     val ast = parser.parse()
     val optimizedAst = Optimizer.optimize(ast)
-
     if (showAst) {
       println("=== AST OUTPUT ===")
       CaseClassPrinter.printCaseClass(optimizedAst)
@@ -35,7 +34,11 @@ object Main {
       // Interpretation
       println("=== INTERPRETATION ===")
       val interpreter = new Interpreter()
-      interpreter.interpret(optimizedAst)
+      try {
+        interpreter.interpret(optimizedAst)
+      } catch {
+        case e: Exception => println(e.getMessage)
+      }
     }
   }
 }
