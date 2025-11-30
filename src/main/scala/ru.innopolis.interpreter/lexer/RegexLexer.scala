@@ -63,6 +63,11 @@ class RegexLexer {
           pos += bestMatch.length
           tokens += Token(Code.NEWLINE, bestMatch, Span(beginLine, beginCol, beginCol + 1))
 
+        case Some((Rule(Code.STRING_LITERAL, _), bestMatch)) =>
+          col += bestMatch.length
+          pos += bestMatch.length
+          tokens += Token(Code.STRING_LITERAL, bestMatch.substring(1, bestMatch.length-1), Span(beginLine, beginCol, col))
+
         case Some((rule, bestMatch)) =>
           col += bestMatch.length
           pos += bestMatch.length

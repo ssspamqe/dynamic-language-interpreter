@@ -9,13 +9,22 @@ object Token {
     val base = (value: Any) => Token(span, code, value)
 
     code match {
-      case Code.INT_LITERAL    => base(rawToken.toLong)
-      case Code.REAL_LITERAL   => base(rawToken.toDouble)
-      case Code.STRING_LITERAL => base(rawToken)
-      case Code.IDENTIFIER     => base(rawToken)
-      case Code.NEWLINE        => base("\\n")
-      case Code.SPACE          => base(" ")
-      case _                   => base(rawToken)
+      case Code.INT_LITERAL => base(rawToken.toLong)
+      case Code.REAL_LITERAL => base(rawToken.toDouble)
+      case Code.STRING_LITERAL => base(unescapeString(rawToken))
+      case Code.IDENTIFIER => base(rawToken)
+      case Code.NEWLINE => base("\\n")
+      case Code.SPACE => base(" ")
+      case _ => base(rawToken)
     }
   }
+
+  private def unescapeString(s: String): String = {
+    s.replace("\\n", "\n")
+      .replace("\\t", "\t")
+      .replace("\\r", "\r")
+      .replace("\\\\", "\\")
+      .replace("\\\"", "\"")
+  }
+
 }
