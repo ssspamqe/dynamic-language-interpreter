@@ -74,5 +74,32 @@ class SemanticCheckAnalyzerTest extends AnyFunSuite {
     exception shouldBe a[SemanticCheckException]
   }
 
+  test("should not throw exception when shadowing variable in function parameters") {
+    val codeBlock = parse(
+      List(
+        token(Code.VAR),
+        token(Code.IDENTIFIER, "a"),
+        token(Code.ASSIGNMENT),
+        token(Code.INT_LITERAL, 1L),
+
+        token(Code.NEWLINE),
+
+        token(Code.VAR),
+        token(Code.IDENTIFIER, "customFunc"),
+        token(Code.ASSIGNMENT),
+        token(Code.FUNC),
+        token(Code.ROUND_BRACKET_LEFT),
+        token(Code.IDENTIFIER, "a"),
+        token(Code.ROUND_BRACKET_RIGHT),
+        token(Code.IS),
+        token(Code.RETURN),
+        token(Code.IDENTIFIER, "a"),
+        token(Code.END)
+      )
+    )
+
+    noException should be thrownBy semanticCheckAnalyzer.analyze(codeBlock)
+  }
+
 
 }
