@@ -4,6 +4,7 @@ package ru.innopolis.interpreter
 import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
 import ru.innopolis.interpreter.runtime.Interpreter
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
+import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticCheckAnalyzer
 
 import scala.io.Source
 
@@ -26,6 +27,8 @@ object Main {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val ast = parser.parse()
+    val semanticCheckAnalyzer = new SemanticCheckAnalyzer()
+    semanticCheckAnalyzer.analyze(ast)
     val optimizedAst = Optimizer.optimize(ast)
     if (showAst) {
       println("=== AST OUTPUT ===")
