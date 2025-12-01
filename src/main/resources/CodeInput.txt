@@ -1,5 +1,0 @@
-var a := 10
-print a, "\n"
-var c := func(a, b) => a + b
-var d := func(a, b) => a - b
-print c(10, 20)

@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
-import ru.innopolis.interpreter.exception.{InvalidTokenException, UnexpectedTokenException}
+import ru.innopolis.interpreter.exception.{InvalidTokenException, UnexpectedEndOfInputException, UnexpectedTokenException}
 import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
@@ -210,6 +210,9 @@ class ExpressionParser(private val stream: TokenStream) {
     if (stream.hasNext && stream.current.code == Code.IS) {
       stream.next()
       val codeBlock = bodyParser.parseCodeBlock(Set(Code.END))
+      if (!stream.hasNext) {
+        throw new UnexpectedEndOfInputException(Code.END, ParseContext.FunctionDeclaration.description)
+      }
       stream.expect(Code.END)
       FunctionLiteral(args.reverse, codeBlock)
     } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
