@@ -16,13 +16,13 @@ class InterpreterTest extends AnyFunSuite {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val ast = parser.parse()
-//    val optimizedAst = Optimizer.optimize(ast)
+    val optimizedAst = Optimizer.optimize(ast)
 
     val out = new ByteArrayOutputStream()
 
     Console.withOut(out) {
       val interpreter = new Interpreter()
-      interpreter.interpret(ast)
+      interpreter.interpret(optimizedAst)
     }
 
     out.toString("UTF-8")
@@ -433,6 +433,16 @@ class InterpreterTest extends AnyFunSuite {
         |""".stripMargin
     val output = interpretCode(code)
     assert(output == "001")
+  }
+
+  test("func use another func") {
+    val code =
+      """var f1 := func(x) => 2*x
+        |var f2 := func(x) => f1(x*3)
+        |f2(1)
+        """.stripMargin
+    val output = interpretCode(code)
+    assert(output == "")
   }
 }
 

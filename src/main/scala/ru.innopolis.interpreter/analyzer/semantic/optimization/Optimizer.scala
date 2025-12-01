@@ -167,6 +167,8 @@ object Optimizer {
       case Unary(_, e) => collectExpr(e)
       case FunctionCall(target, args) =>
         collectExpr(target) ++ args.flatMap(collectExpr).toSet
+      case LambdaLiteral(args, body) => args.flatMap(collectExpr).toSet ++ collectExpr(body)
+      case FunctionLiteral(args, body) => args.flatMap(collectExpr).toSet ++ collectUsedVariables(body.statements)
       case ArrayLiteral(elements) => elements.flatMap(collectExpr).toSet
       case TupleLiteral(entries) => entries.flatMap(e => collectExpr(e.value)).toSet
       case Variable(name) => Set(name)

@@ -8,7 +8,7 @@ import ru.innopolis.interpreter.analyzer.semantic.utils.TestUtils._
 import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
-import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.Literal
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal.{FunctionLiteral, LambdaLiteral, Literal}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.{ArrayAccess, FunctionCall, TupleIndexAccess}
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Binary, Variable}
@@ -28,6 +28,12 @@ class OptimizerTest extends AnyFunSuite {
   private def parse(tokens: List[Token[_]]): CodeBlock = {
     val parser = new AASTParser(new TokenStream(tokens))
     parser.parse()
+  }
+
+  private def parse(code: String): CodeBlock = {
+    val lexer = new RegexLexer()
+    val tokens = lexer.tokenize(code)
+    parse(tokens)
   }
 
   test("sum constants") {
@@ -545,5 +551,53 @@ class OptimizerTest extends AnyFunSuite {
       Literal(2)
     )
     Optimizer.hasSideEffect(expr) shouldBe true
+  }
+
+  test("Lambda use function") {
+    val tokens = parse(
+      """
+        |var f1 := func(x) => 2*x
+        |var f2 := func(x) => f1(x*3)
+        |f2(1)
+        |""".stripMargin)
+    val ast = Optimizer.optimize(tokens)
+    ast.statements.exists{
+      case ExpressionStatement(FunctionCall(Variable("f2"), _)) => true
+      case _ => false
+    } shouldBe true
+  }
+
+  test("function use function") {
+    val tokens = parse(
+      """
+        |var f1 := func(x) => 2*x
+        |var f2 := func(x) is
+        |  var a := f1(x*3)
+        |  return a + 4
+        |  end
+        |f2(1)
+        |""".stripMargin)
+    val ast = Optimizer.optimize(tokens)
+    ast.statements.exists{
+      case ExpressionStatement(FunctionCall(Variable("f2"), _)) => true
+      case _ => false
+    } shouldBe true
+  }
+
+  test("function don't use function") {
+    val tokens = parse(
+      """
+        |var f1 := func(x) => 2*x
+        |var f2 := func(x) is
+        |  var a := x + 52
+        |  return a + 67
+        |  end
+        |f2(1)
+        |""".stripMargin)
+    val ast = Optimizer.optimize(tokens)
+    ast.statements.exists{
+      case VariableDeclaration("f1", _) => true
+      case _ => false
+    } shouldBe false
   }
 }
