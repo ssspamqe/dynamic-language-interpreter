@@ -9,6 +9,7 @@ import ru.innopolis.interpreter.cli.args.ProgramArgsParser
 //  --semantic-check-off - disable semantic check (default: enabled)
 //  --semantic-optimize-off - disable semantic optimization (default: enabled)
 //  --pretty-print - show stage progress and pretty output (default: disabled)
+//  --debug - show stack traces of exceptions (default: disabled)
 
 object Main {
 
