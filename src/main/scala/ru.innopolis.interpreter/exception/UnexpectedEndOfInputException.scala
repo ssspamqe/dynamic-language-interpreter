@@ -2,11 +2,15 @@ package ru.innopolis.interpreter.exception
 
 import ru.innopolis.interpreter.lexer.Code
 
-class UnexpectedEndOfInputException(expectedCode: Code, context: String = "")
+class UnexpectedEndOfInputException(expectedCode: Code = null, context: String = null)
   extends TokenException(
-    if (context.nonEmpty)
-      s"Unexpected end of input! Expected '$expectedCode' to close $context"
-    else
-      s"Unexpected end of input! Expected: $expectedCode"
-  )
-
+    if (expectedCode != null) {
+      if (context.nonEmpty)
+        s"Unexpected end of input! Expected '$expectedCode' to close $context"
+      else
+        s"Unexpected end of input! Expected: $expectedCode"
+    } else {
+      s"Unexpected end of input! While parsing $context"
+    }
+  ) {
+}

@@ -26,7 +26,7 @@ class AASTParser(private val stream: TokenStream) {
   }
 
   def parseStatement(): Statement = {
-    if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
+    if (!stream.hasNext) throw new UnexpectedEndOfInputException(context = "statement")
     stream.current.code match {
       case Code.RETURN =>
         parseReturnStatement()
