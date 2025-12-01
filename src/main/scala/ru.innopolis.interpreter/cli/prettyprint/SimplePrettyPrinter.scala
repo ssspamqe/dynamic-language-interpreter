@@ -1,4 +1,4 @@
-package ru.innopolis.interpreter.cli.print
+package ru.innopolis.interpreter.cli.prettyprint
 
 class SimplePrettyPrinter extends PrettyPrinter {
   override def printStage(stageName: String): Unit = {

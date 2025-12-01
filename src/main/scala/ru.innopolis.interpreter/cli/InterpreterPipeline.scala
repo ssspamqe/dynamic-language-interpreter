@@ -3,7 +3,7 @@ package ru.innopolis.interpreter.cli
 import ru.innopolis.interpreter.RegexLexer
 import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
 import ru.innopolis.interpreter.cli.args.ProgramArgs
-import ru.innopolis.interpreter.cli.print.{PrettyPrinter, SimplePrettyPrinter}
+import ru.innopolis.interpreter.cli.prettyprint.{PrettyPrinter, SimplePrettyPrinter}
 import ru.innopolis.interpreter.runtime.Interpreter
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticCheckAnalyzer
@@ -31,7 +31,12 @@ class InterpreterPipeline(programArgs: ProgramArgs) {
       }
     } catch {
       case e: Exception =>
+        // Print user-friendly error message first
         prettyPrinter.printError(e.getMessage)
+        // If debug flag enabled, print stacktrace to stderr
+        if (programArgs.debug) {
+          e.printStackTrace()
+        }
     }
   }
 

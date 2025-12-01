@@ -8,8 +8,8 @@ class ProgramArgsParser {
 
     while (i < args.length) {
       args(i) match {
-        case arg if arg.startsWith("--") =>
-          val key = arg.substring(2)
+        case arg if arg.startsWith("--") || arg.startsWith("-") =>
+          val key = arg.replaceFirst("^-+", "")
           flags = flags :+ key
           i += 1
         case arg =>
@@ -25,7 +25,8 @@ class ProgramArgsParser {
       showAst = flags.contains("show-ast"),
       semanticCheck = !flags.contains("semantic-check-off"),
       semanticOptimize = !flags.contains("semantic-optimize-off"),
-      prettyPrint = flags.contains("pretty-print")
+      prettyPrint = flags.contains("pretty-print"),
+      debug = flags.contains("debug")
     )
   }
 }

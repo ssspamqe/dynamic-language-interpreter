@@ -5,5 +5,6 @@ case class ProgramArgs(
                         showAst: Boolean,
                         semanticCheck: Boolean,
                         semanticOptimize: Boolean,
-                        prettyPrint: Boolean
+                        prettyPrint: Boolean,
+                        debug: Boolean
                       )
