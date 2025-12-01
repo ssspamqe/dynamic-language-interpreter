@@ -91,69 +91,106 @@ object Optimizer {
 
   private[optimization] def optimizeExpr(expr: Expression): Expression = expr match {
     case Binary(op, left, right) =>
-      (optimizeExpr(left), optimizeExpr(right)) match {
-        case (Literal(an: Number), Literal(bn: Number)) =>
-          val a = an.doubleValue()
-          val b = bn.doubleValue()
+      val l = optimizeExpr(left)
+      val r = optimizeExpr(right)
+      (l, r) match {
+        case (Literal(a: Number), Literal(b: Number)) =>
+          val ad = a.doubleValue()
+          val bd = b.doubleValue()
           op match {
             case Code.PLUS =>
-              Literal(a + b)
+              foldNumeric(a, b, ad + bd)
             case Code.MINUS =>
-              Literal(a - b)
+              foldNumeric(a, b, ad - bd)
             case Code.MULTIPLICATION =>
-              Literal(a * b)
-            case Code.DIVISION if b != 0 && b != 0.0 =>
-              Literal(a / b)
+              foldNumeric(a, b, ad * bd)
             case Code.DIVISION =>
-              Binary(op, Literal(a), Literal(b))
-            case Code.LESS => Literal(a < b)
-            case Code.LESS_OR_EQUAL => Literal(a <= b)
-            case Code.MORE => Literal(a > b)
-            case Code.MORE_OR_EQUAL => Literal(a >= b)
+              if (bd == 0) Binary(op, l, r)
+              else {
+                val isInt  = a.isInstanceOf[java.lang.Integer] && b.isInstanceOf[java.lang.Integer]
+                val isLong = a.isInstanceOf[java.lang.Long]    && b.isInstanceOf[java.lang.Long]
+
+                if (isInt)
+                  Literal(Math.floor(ad / bd).toInt)
+                else if (isLong)
+                  Literal(Math.floor(ad / bd).toLong)
+                else
+                  Literal(ad / bd)
+              }
+            case Code.LESS => Literal(ad < bd)
+            case Code.LESS_OR_EQUAL => Literal(ad <= bd)
+            case Code.MORE => Literal(ad > bd)
+            case Code.MORE_OR_EQUAL => Literal(ad >= bd)
+            case Code.EQUAL => Literal(ad == bd)
+            case Code.NOT_EQUAL => Literal(ad != bd)
+          }
+        case (Literal(a: String), Literal(b: String)) if op == Code.PLUS =>
+          Literal(a + b)
+        case (TupleLiteral(as), TupleLiteral(bs)) if op == Code.PLUS =>
+          TupleLiteral(as ++ bs)
+        case (ArrayLiteral(as), ArrayLiteral(bs)) if op == Code.PLUS =>
+          ArrayLiteral(as ++ bs)
+        case (Literal(a: Boolean), Literal(b: Boolean)) =>
+          op match {
+            case Code.AND => Literal(a && b)
+            case Code.OR => Literal(a || b)
+            case Code.XOR => Literal(a ^ b)
             case Code.EQUAL => Literal(a == b)
             case Code.NOT_EQUAL => Literal(a != b)
-            case _ => Binary(op, Literal(a), Literal(b))
+            case _ => Binary(op, l, r)
           }
-        case (Literal(a: Boolean), Literal(b: Boolean)) => op match {
-          case Code.AND => Literal(a && b)
-          case Code.OR => Literal(a || b)
-          case Code.XOR => Literal(a ^ b)
-          case Code.EQUAL => Literal(a == b)
-          case Code.NOT_EQUAL => Literal(a != b)
-          case _ => Binary(op, Literal(a), Literal(b))
-        }
-        case (l, r) => Binary(op, l, r)
+        case _ => Binary(op, l, r)
       }
-
     case Unary(op, right) =>
-      optimizeExpr(right) match {
-        case Literal(a: Number) => op match {
-          case Code.MINUS =>
-            a match {
-              case ai: java.lang.Integer => Literal(-ai.intValue())
-              case al: java.lang.Long => Literal(-al.longValue())
-              case ad: java.lang.Double => Literal(-ad.doubleValue())
-              case af: java.lang.Float => Literal(-af.floatValue())
-              case _ => Unary(op, Literal(a))
-            }
-
-          case _ => Unary(op, Literal(a))
-        }
-        case Literal(a: Boolean) => op match {
-          case Code.NOT => Literal(!a)
-          case _ => Unary(op, Literal(a))
-        }
-        case r => Unary(op, r)
+      val r = optimizeExpr(right)
+      r match {
+        case Literal(a: Number) =>
+          op match {
+            case Code.MINUS =>
+              a match {
+                case i: java.lang.Integer => Literal(-i.intValue())
+                case l: java.lang.Long => Literal(-l.longValue())
+                case f: java.lang.Float => Literal(-f.floatValue())
+                case d: java.lang.Double => Literal(-d.doubleValue())
+              }
+            case Code.PLUS =>
+              Literal(a)
+            case _ => Unary(op, r)
+          }
+        case Literal(a: Boolean) if op == Code.NOT =>
+          Literal(!a)
+        case _ =>
+          Unary(op, r)
       }
+
     case ArrayAccess(t, i) =>
       ArrayAccess(optimizeExpr(t), optimizeExpr(i))
-    case ArrayLiteral(elements) =>
-      ArrayLiteral(elements.map(optimizeExpr))
-    case TupleLiteral(entries) =>
-      TupleLiteral(entries.map(te => te.copy(value = optimizeExpr(te.value))))
+
+    case ArrayLiteral(xs) =>
+      ArrayLiteral(xs.map(optimizeExpr))
+
+    case TupleLiteral(es) =>
+      TupleLiteral(es.map(e => e.copy(value = optimizeExpr(e.value))))
+
     case FunctionCall(target, args) =>
       FunctionCall(optimizeExpr(target), args.map(optimizeExpr))
+
     case _ => expr
+  }
+
+  private def isInt(d: Double): Boolean =
+    d.isFinite && d % 1.0 == 0.0 && d >= Int.MinValue && d <= Int.MaxValue
+
+  private def isLong(d: Double): Boolean =
+    d.isFinite && d % 1.0 == 0.0 && d >= Long.MinValue && d <= Long.MaxValue
+
+  private def foldNumeric(a: Number, b: Number, result: Double): Literal[_] = {
+    if (a.isInstanceOf[Int] && b.isInstanceOf[Int] && isInt(result))
+      Literal(result.toInt)
+    else if (a.isInstanceOf[Long] && b.isInstanceOf[Long] && isLong(result))
+      Literal(result.toLong)
+    else
+      Literal(result)
   }
 
   private[optimization] def collectUsedVariables(statements: List[Statement]): Set[String] = {
