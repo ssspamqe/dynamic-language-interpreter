@@ -51,7 +51,7 @@ class Interpreter {
   private def executeStatement(stmt: Statement): Unit = {
     stmt match {
       case PrintStatement(expressions) =>
-        val values = expressions.map(evaluateExpression)
+        val values = expressions.map(e => formatValue(evaluateExpression(e)))
         print(values.mkString(" "))
 
       case VariableDeclaration(name, expr) =>
@@ -424,4 +424,43 @@ class Interpreter {
       case TypeIndicator.FuncType => value.isInstanceOf[List[Any] => Any]
     }
   }
+
+  private def formatValue(value: Any, quotes: Boolean = false): String = value match {
+
+    // string
+    case s: String if quotes =>
+      "\"" + s + "\""
+    case s: String if !quotes =>
+      s
+
+    // integer / real / boolean
+    case n: Number => n.toString
+    case b: Boolean => b.toString
+
+    // array
+    case arr: ArrayBuffer[Any] =>
+      "[" + arr.map(formatValue(_, true)).mkString(", ") + "]"
+
+    // tuple (Map[String, Any])
+    case map: Map[_, _] =>
+      // сортируем по ключам: сначала имена, потом числовые индексы
+      val (named, indexed) = map.toList.partition(_._1.asInstanceOf[String].forall(!_.isDigit))
+
+      val namedSorted   = named.asInstanceOf[List[(String, Any)]].sortBy(_._1)
+      val indexedSorted = indexed.asInstanceOf[List[(String, Any)]].sortBy(_._1.toInt)
+
+      val parts =
+        (namedSorted ++ indexedSorted).map { case (k, v) => s"$k:=${formatValue(v, true)}" }
+
+      "{" + parts.mkString(", ") + "}"
+
+    // function (print as <function>)
+    case f: (List[Any] => Any) =>
+      "<function>"
+
+    // anything else
+    case other =>
+      other.toString
+  }
+
 }
