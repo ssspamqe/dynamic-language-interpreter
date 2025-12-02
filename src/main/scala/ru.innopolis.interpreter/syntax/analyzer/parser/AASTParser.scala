@@ -1,6 +1,6 @@
 package ru.innopolis.interpreter.syntax.analyzer.parser
 
-import ru.innopolis.interpreter.exception.{InvalidTokenContextException, UnexpectedTokenException}
+import ru.innopolis.interpreter.exception.{UnexpectedEndOfInputException, UnexpectedTokenException}
 import ru.innopolis.interpreter.lexer.Code
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references.ArrayAccess
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.{Expression, Variable}
@@ -26,7 +26,7 @@ class AASTParser(private val stream: TokenStream) {
   }
 
   def parseStatement(): Statement = {
-    if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
+    if (!stream.hasNext) throw new UnexpectedEndOfInputException(context = "statement")
     stream.current.code match {
       case Code.RETURN =>
         parseReturnStatement()
@@ -94,7 +94,7 @@ class AASTParser(private val stream: TokenStream) {
         if (stream.current.code == Code.NEWLINE) stream.next()
         Some(parseCodeBlock(Set(Code.END)))
       } else None
-    stream.expect(Code.END)
+    expectEnd(ParseContext.IfStatement)
     IfStatement(cond, thenBlock, elseBlock)
   }
 
@@ -144,7 +144,7 @@ class AASTParser(private val stream: TokenStream) {
     stream.expect(Code.LOOP)
     if (stream.current.code == Code.NEWLINE) stream.next()
     val body = parseCodeBlock(Set(Code.END))
-    stream.expect(Code.END)
+    expectEnd(ParseContext.Loop)
     new Loop(body)
   }
 
@@ -158,7 +158,7 @@ class AASTParser(private val stream: TokenStream) {
       stream.next()
       if (stream.current.code == Code.NEWLINE) stream.next()
       val codeBlock = parseCodeBlock(Set(Code.END))
-      stream.expect(Code.END)
+      expectEnd(ParseContext.FunctionDeclaration)
       codeBlock
     } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
       stream.next()
@@ -183,4 +183,11 @@ class AASTParser(private val stream: TokenStream) {
 
   private def skip(codes: Set[Code]): Unit =
     while (stream.hasNext && codes.contains(stream.current.code)) stream.next()
+
+  private def expectEnd(context: ParseContext): Unit = {
+    if (!stream.hasNext) {
+      throw new UnexpectedEndOfInputException(Code.END, context.description)
+    }
+    stream.expect(Code.END)
+  }
 }

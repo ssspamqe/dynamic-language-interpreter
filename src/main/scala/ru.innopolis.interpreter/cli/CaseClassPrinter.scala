@@ -1,4 +1,4 @@
-package ru.innopolis.interpreter
+package ru.innopolis.interpreter.cli
 
 object CaseClassPrinter {
 
