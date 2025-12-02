@@ -1,6 +1,7 @@
 package ru.innopolis.interpreter.runtime
 
 import ru.innopolis.interpreter.lexer.Code
+import ru.innopolis.interpreter.runtime.breaks.{FunctionReturnBreak, LoopExitBreak}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
@@ -15,17 +16,6 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
-/**
- * Exception used to exit from a loop
- */
-private class LoopExitException extends Exception
-
-// Исключение для выхода из функции по return
-private class FunctionReturn(val value: Option[Any]) extends Throwable
-
-/**
- * Interpreter that executes the AST directly
- */
 class Interpreter {
   private var environment = new Stack()
 
@@ -62,8 +52,8 @@ class Interpreter {
       val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
       val idx = evaluateExpression(index) match {
         case l: Long => l.toInt
-        case i: Int  => i
-        case _       => throw new RuntimeException("Array index must be an integer")
+        case i: Int => i
+        case _ => throw new RuntimeException("Array index must be an integer")
       }
       val valValue = evaluateExpression(value)
       // Автоматически расширяем массив если нужно
@@ -75,12 +65,16 @@ class Interpreter {
     case IfStatement(condition, trueBranch, falseBranch) =>
       val condValue = evaluateExpression(condition) match {
         case b: Boolean => b
-        case _          => throw new RuntimeException("Condition must be a boolean")
+        case _ => throw new RuntimeException("Condition must be a boolean")
       }
       if (condValue) {
-        withNewLayer { executeBlock(trueBranch) }
+        withNewLayer {
+          executeBlock(trueBranch)
+        }
       } else {
-        falseBranch.foreach(b => withNewLayer { executeBlock(b) })
+        falseBranch.foreach(b => withNewLayer {
+          executeBlock(b)
+        })
       }
 
     case WhileLoop(condition, body) =>
@@ -88,14 +82,16 @@ class Interpreter {
         while (true) {
           val condValue = evaluateExpression(condition) match {
             case b: Boolean => b
-            case _          => throw new RuntimeException("While condition must be a boolean")
+            case _ => throw new RuntimeException("While condition must be a boolean")
           }
           if (!condValue) break
           try {
-            withNewLayer { executeBlock(body) }
+            withNewLayer {
+              executeBlock(body)
+            }
           } catch {
-            case _: LoopExitException => break
-            case fr: FunctionReturn   => throw fr // пробрасываем return наружу
+            case _: LoopExitBreak => break
+            case fr: FunctionReturnBreak => throw fr // пробрасываем return наружу
           }
         }
       }
@@ -103,13 +99,13 @@ class Interpreter {
     case RangeLoop(ident, from, to, body) =>
       val fromValue = evaluateExpression(from) match {
         case l: Long => l
-        case i: Int  => i.toLong
-        case _       => throw new RuntimeException("Range loop 'from' must be an integer")
+        case i: Int => i.toLong
+        case _ => throw new RuntimeException("Range loop 'from' must be an integer")
       }
       val toValue = evaluateExpression(to) match {
         case l: Long => l
-        case i: Int  => i.toLong
-        case _       => throw new RuntimeException("Range loop 'to' must be an integer")
+        case i: Int => i.toLong
+        case _ => throw new RuntimeException("Range loop 'to' must be an integer")
       }
       breakable {
         for (i <- fromValue to toValue) {
@@ -119,8 +115,8 @@ class Interpreter {
               executeBlock(body)
             }
           } catch {
-            case _: LoopExitException => break
-            case fr: FunctionReturn   => throw fr
+            case _: LoopExitBreak => break
+            case fr: FunctionReturnBreak => throw fr
           }
         }
       }
@@ -137,8 +133,8 @@ class Interpreter {
                   executeBlock(body)
                 }
               } catch {
-                case _: LoopExitException => break
-                case fr: FunctionReturn   => throw fr
+                case _: LoopExitBreak => break
+                case fr: FunctionReturnBreak => throw fr
               }
             }
           case list: List[Any] =>
@@ -149,8 +145,8 @@ class Interpreter {
                   executeBlock(body)
                 }
               } catch {
-                case _: LoopExitException => break
-                case fr: FunctionReturn   => throw fr
+                case _: LoopExitBreak => break
+                case fr: FunctionReturnBreak => throw fr
               }
             }
           case _ => throw new RuntimeException("Collection loop requires an array or list")
@@ -161,19 +157,21 @@ class Interpreter {
       breakable {
         while (true) {
           try {
-            withNewLayer { executeBlock(loop.body) }
+            withNewLayer {
+              executeBlock(loop.body)
+            }
           } catch {
-            case _: LoopExitException => break
-            case fr: FunctionReturn   => throw fr
+            case _: LoopExitBreak => break
+            case fr: FunctionReturnBreak => throw fr
           }
         }
       }
 
     case ReturnStatement(expr) =>
-      throw new FunctionReturn(expr.map(evaluateExpression))
+      throw new FunctionReturnBreak(expr.map(evaluateExpression))
 
     case ExitStatement() =>
-      throw new LoopExitException()
+      throw new LoopExitBreak()
 
     case ExpressionStatement(expr) =>
       evaluateExpression(expr)
@@ -185,7 +183,7 @@ class Interpreter {
     case Variable(name) => environment.getVariable(name)
 
     case Binary(operation, left, right) =>
-      val leftVal  = evaluateExpression(left)
+      val leftVal = evaluateExpression(left)
       val rightVal = evaluateExpression(right)
       evaluateBinary(operation, leftVal, rightVal)
 
@@ -194,7 +192,7 @@ class Interpreter {
       evaluateUnary(operation, rightVal)
 
     case FunctionCall(target, args) =>
-      val func      = evaluateExpression(target)
+      val func = evaluateExpression(target)
       val argValues = args.map(evaluateExpression)
       callFunction(func, argValues)
 
@@ -202,8 +200,8 @@ class Interpreter {
       val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
       val idx = evaluateExpression(index) match {
         case l: Long => l.toInt
-        case i: Int  => i
-        case _       => throw new RuntimeException("Array index must be an integer")
+        case i: Int => i
+        case _ => throw new RuntimeException("Array index must be an integer")
       }
       if (idx > arr.length) {
         throw new RuntimeException(s"Array index $idx out of bounds for array of length ${arr.length}")
@@ -214,7 +212,7 @@ class Interpreter {
       ArrayBuffer.from(elements.map(evaluateExpression))
 
     case TupleLiteral(elements) =>
-      val map   = mutable.Map[String, Any]()
+      val map = mutable.Map[String, Any]()
       var index = 1
       for (entry <- elements) {
         val value = evaluateExpression(entry.value)
@@ -239,7 +237,7 @@ class Interpreter {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
         // создаём окружение вызова, замкнутое на capturedEnv
-        val funcEnv   = new Stack(Some(capturedEnv))
+        val funcEnv = new Stack(Some(capturedEnv))
         val oldEnvRef = environment
         environment = funcEnv
         // новый слой для параметров
@@ -252,7 +250,7 @@ class Interpreter {
             executeBlock(body)
             None
           } catch {
-            case fr: FunctionReturn => fr.value.getOrElse(None)
+            case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
           environment = oldEnvRef
@@ -265,7 +263,7 @@ class Interpreter {
         if (argValues.length != args.length) {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
-        val funcEnv   = new Stack(Some(capturedEnv))
+        val funcEnv = new Stack(Some(capturedEnv))
         val oldEnvRef = environment
         environment = funcEnv
         environment.addLayer()
@@ -276,7 +274,7 @@ class Interpreter {
           try {
             evaluateExpression(body)
           } catch {
-            case fr: FunctionReturn => fr.value.getOrElse(None)
+            case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
           environment = oldEnvRef
@@ -448,7 +446,7 @@ class Interpreter {
       // сортируем по ключам: сначала имена, потом числовые индексы
       val (named, indexed) = map.toList.partition(_._1.asInstanceOf[String].forall(!_.isDigit))
 
-      val namedSorted   = named.asInstanceOf[List[(String, Any)]].sortBy(_._1)
+      val namedSorted = named.asInstanceOf[List[(String, Any)]].sortBy(_._1)
       val indexedSorted = indexed.asInstanceOf[List[(String, Any)]].sortBy(_._1.toInt)
 
       val parts =
