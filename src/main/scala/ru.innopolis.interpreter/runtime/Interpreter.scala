@@ -20,272 +20,274 @@ import scala.util.control.Breaks._
  */
 private class LoopExitException extends Exception
 
+// Исключение для выхода из функции по return
+private class FunctionReturn(val value: Option[Any]) extends Throwable
+
 /**
  * Interpreter that executes the AST directly
  */
 class Interpreter {
-  private var environment = new Environment()
-  private var returnValue: Option[Any] = None
-  private var shouldExit: Boolean = false
+  private var environment = new Stack()
 
   def interpret(block: CodeBlock): Unit = {
-    environment = new Environment()
-    returnValue = None
-    shouldExit = false
-    executeBlock(block, environment)
+    environment = new Stack()
+    executeBlock(block)
   }
 
-  private def executeBlock(block: CodeBlock, env: Environment): Unit = {
-    val oldEnv = environment
-    environment = env
-    try {
-      for (stmt <- block.statements) {
-        if (shouldExit || returnValue.isDefined) return
-        executeStatement(stmt)
+  private def executeBlock(block: CodeBlock): Unit = {
+    // просто выполняем операторы в текущем environment (слоями управляют вызывающие)
+    block.statements.foreach(executeStatement)
+  }
+
+  private def withNewLayer[A](body: => A): A = {
+    environment.addLayer()
+    try body
+    finally environment.popLayer()
+  }
+
+  private def executeStatement(stmt: Statement): Unit = stmt match {
+    case PrintStatement(expressions) =>
+      val values = expressions.map(e => formatValue(evaluateExpression(e)))
+      print(values.mkString(" "))
+
+    case VariableDeclaration(name, expr) =>
+      val value = evaluateExpression(expr)
+      environment.defineVariable(name, value)
+
+    case VariableAssignment(name, expr) =>
+      val value = evaluateExpression(expr)
+      environment.setVariable(name, value)
+
+    case ArrayElementAssignment(target, index, value) =>
+      val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
+      val idx = evaluateExpression(index) match {
+        case l: Long => l.toInt
+        case i: Int  => i
+        case _       => throw new RuntimeException("Array index must be an integer")
       }
-    } finally {
-      environment = oldEnv
-    }
-  }
+      val valValue = evaluateExpression(value)
+      // Автоматически расширяем массив если нужно
+      if (idx > arr.length) {
+        arr ++= ArrayBuffer.fill(idx - arr.length)(0)
+      }
+      arr(idx - 1) = valValue
 
-  private def executeStatement(stmt: Statement): Unit = {
-    stmt match {
-      case PrintStatement(expressions) =>
-        val values = expressions.map(e => formatValue(evaluateExpression(e)))
-        print(values.mkString(" "))
+    case IfStatement(condition, trueBranch, falseBranch) =>
+      val condValue = evaluateExpression(condition) match {
+        case b: Boolean => b
+        case _          => throw new RuntimeException("Condition must be a boolean")
+      }
+      if (condValue) {
+        withNewLayer { executeBlock(trueBranch) }
+      } else {
+        falseBranch.foreach(b => withNewLayer { executeBlock(b) })
+      }
 
-      case VariableDeclaration(name, expr) =>
-        val value = evaluateExpression(expr)
-        environment.defineVariable(name, value)
-
-      case VariableAssignment(name, expr) =>
-        val value = evaluateExpression(expr)
-        environment.setVariable(name, value)
-
-      case ArrayElementAssignment(target, index, value) =>
-        val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
-        val idx = evaluateExpression(index) match {
-          case l: Long => l.toInt
-          case i: Int => i
-          case _ => throw new RuntimeException("Array index must be an integer")
-        }
-        val valValue = evaluateExpression(value)
-        // Автоматически расширяем массив если нужно
-        if (idx > arr.length) {
-          arr ++= ArrayBuffer.fill(idx - arr.length)(0)
-        }
-        arr(idx - 1) = valValue
-
-      case IfStatement(condition, trueBranch, falseBranch) =>
-        val condValue = evaluateExpression(condition) match {
-          case b: Boolean => b
-          case _ => throw new RuntimeException("Condition must be a boolean")
-        }
-        if (condValue) {
-          executeBlock(trueBranch, environment.createChild())
-        } else {
-          falseBranch.foreach(executeBlock(_, environment.createChild()))
-        }
-
-      case WhileLoop(condition, body) =>
-        breakable {
-          while (true) {
-            if (shouldExit || returnValue.isDefined) break
-            val condValue = evaluateExpression(condition) match {
-              case b: Boolean => b
-              case _ => throw new RuntimeException("While condition must be a boolean")
-            }
-            if (!condValue) break
-            try {
-              executeBlock(body, environment.createChild())
-            } catch {
-              case _: LoopExitException => break
-            }
+    case WhileLoop(condition, body) =>
+      breakable {
+        while (true) {
+          val condValue = evaluateExpression(condition) match {
+            case b: Boolean => b
+            case _          => throw new RuntimeException("While condition must be a boolean")
           }
-        }
-
-      case RangeLoop(ident, from, to, body) =>
-        val fromValue = evaluateExpression(from) match {
-          case l: Long => l
-          case i: Int => i.toLong
-          case _ => throw new RuntimeException("Range loop 'from' must be an integer")
-        }
-        val toValue = evaluateExpression(to) match {
-          case l: Long => l
-          case i: Int => i.toLong
-          case _ => throw new RuntimeException("Range loop 'to' must be an integer")
-        }
-        breakable {
-          for (i <- fromValue to toValue) {
-            if (shouldExit || returnValue.isDefined) break
-            val childEnv = environment.createChild()
-            ident.foreach(name => childEnv.defineVariable(name, i))
-            try {
-              executeBlock(body, childEnv)
-            } catch {
-              case _: LoopExitException => break
-            }
-          }
-        }
-
-      case CollectionLoop(ident, collection, body) =>
-        val coll = evaluateExpression(collection)
-        breakable {
-          coll match {
-            case arr: ArrayBuffer[Any] =>
-              for (elem <- arr) {
-                if (shouldExit || returnValue.isDefined) break
-                val childEnv = environment.createChild()
-                childEnv.defineVariable(ident, elem)
-                try {
-                  executeBlock(body, childEnv)
-                } catch {
-                  case _: LoopExitException => break
-                }
-              }
-            case list: List[Any] =>
-              for (elem <- list) {
-                if (shouldExit || returnValue.isDefined) break
-                val childEnv = environment.createChild()
-                childEnv.defineVariable(ident, elem)
-                try {
-                  executeBlock(body, childEnv)
-                } catch {
-                  case _: LoopExitException => break
-                }
-              }
-            case _ => throw new RuntimeException("Collection loop requires an array or list")
-          }
-        }
-
-      case loop: Loop =>
-        breakable {
-          while (true) {
-            if (shouldExit || returnValue.isDefined) break
-            try {
-              executeBlock(loop.body, environment.createChild())
-            } catch {
-              case _: LoopExitException => break
-            }
-          }
-        }
-
-      case ReturnStatement(expr) =>
-        returnValue = expr.map(evaluateExpression)
-
-      case ExitStatement() =>
-        throw new LoopExitException()
-
-      case ExpressionStatement(expr) =>
-        evaluateExpression(expr) // Evaluate but don't use result
-    }
-  }
-
-  private def evaluateExpression(expr: Expression): Any = {
-    expr match {
-      case Literal(value) => value
-
-      case Variable(name) => environment.getVariable(name)
-
-      case Binary(operation, left, right) =>
-        val leftVal = evaluateExpression(left)
-        val rightVal = evaluateExpression(right)
-        evaluateBinary(operation, leftVal, rightVal)
-
-      case Unary(operation, right) =>
-        val rightVal = evaluateExpression(right)
-        evaluateUnary(operation, rightVal)
-
-      case FunctionCall(target, args) =>
-        val func = evaluateExpression(target)
-        val argValues = args.map(evaluateExpression)
-        callFunction(func, argValues)
-
-      case ArrayAccess(target, index) =>
-        val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
-        val idx = evaluateExpression(index) match {
-          case l: Long => l.toInt
-          case i: Int => i
-          case _ => throw new RuntimeException("Array index must be an integer")
-        }
-        if (idx > arr.length) {
-          throw new RuntimeException(s"Array index $idx out of bounds for array of length ${arr.length}")
-        }
-        arr(idx - 1)
-
-      case ArrayLiteral(elements) =>
-        ArrayBuffer.from(elements.map(evaluateExpression))
-
-      case TupleLiteral(elements) =>
-        val map = mutable.Map[String, Any]()
-        var index = 1
-        for (entry <- elements) {
-          val value = evaluateExpression(entry.value)
-          entry.key.foreach(key => map(key) = value)
-          map(index.toString) = value
-          index += 1
-        }
-        map.toMap
-
-      case TupleFieldAccess(target, field) =>
-        val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
-        tuple.getOrElse(field, throw new RuntimeException(s"Tuple field '$field' not found"))
-
-      case TupleIndexAccess(target, index) =>
-        val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
-        tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
-
-      case FunctionLiteral(args, body) =>
-        val capturedEnv = environment // Захватываем контекст
-        (argValues: List[Any]) => {
-          if (argValues.length != args.length) {
-            throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
-          }
-          val funcEnv = capturedEnv.createChild()
-          for ((arg, value) <- args.zip(argValues)) {
-            funcEnv.defineVariable(arg.value, value)
-          }
-          val oldReturn = returnValue
-          val oldExit = shouldExit
-          val oldEnv = environment
-          returnValue = None
-          shouldExit = false
-          environment = funcEnv
+          if (!condValue) break
           try {
-            executeBlock(body, funcEnv)
-            returnValue.getOrElse(None)
-          } finally {
-            returnValue = oldReturn
-            shouldExit = oldExit
-            environment = oldEnv
+            withNewLayer { executeBlock(body) }
+          } catch {
+            case _: LoopExitException => break
+            case fr: FunctionReturn   => throw fr // пробрасываем return наружу
           }
         }
+      }
 
-      case LambdaLiteral(args, body) =>
-        val capturedEnv = environment // Захватываем контекст
-        (argValues: List[Any]) => {
-          if (argValues.length != args.length) {
-            throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
+    case RangeLoop(ident, from, to, body) =>
+      val fromValue = evaluateExpression(from) match {
+        case l: Long => l
+        case i: Int  => i.toLong
+        case _       => throw new RuntimeException("Range loop 'from' must be an integer")
+      }
+      val toValue = evaluateExpression(to) match {
+        case l: Long => l
+        case i: Int  => i.toLong
+        case _       => throw new RuntimeException("Range loop 'to' must be an integer")
+      }
+      breakable {
+        for (i <- fromValue to toValue) {
+          try {
+            withNewLayer {
+              ident.foreach(name => environment.defineVariable(name, i))
+              executeBlock(body)
+            }
+          } catch {
+            case _: LoopExitException => break
+            case fr: FunctionReturn   => throw fr
           }
-          val funcEnv = capturedEnv.createChild()
-          for ((arg, value) <- args.zip(argValues)) {
-            funcEnv.defineVariable(arg.value, value)
+        }
+      }
+
+    case CollectionLoop(ident, collection, body) =>
+      val coll = evaluateExpression(collection)
+      breakable {
+        coll match {
+          case arr: ArrayBuffer[Any] =>
+            for (elem <- arr) {
+              try {
+                withNewLayer {
+                  environment.defineVariable(ident, elem)
+                  executeBlock(body)
+                }
+              } catch {
+                case _: LoopExitException => break
+                case fr: FunctionReturn   => throw fr
+              }
+            }
+          case list: List[Any] =>
+            for (elem <- list) {
+              try {
+                withNewLayer {
+                  environment.defineVariable(ident, elem)
+                  executeBlock(body)
+                }
+              } catch {
+                case _: LoopExitException => break
+                case fr: FunctionReturn   => throw fr
+              }
+            }
+          case _ => throw new RuntimeException("Collection loop requires an array or list")
+        }
+      }
+
+    case loop: Loop =>
+      breakable {
+        while (true) {
+          try {
+            withNewLayer { executeBlock(loop.body) }
+          } catch {
+            case _: LoopExitException => break
+            case fr: FunctionReturn   => throw fr
           }
-          val oldEnv = environment
-          environment = funcEnv
+        }
+      }
+
+    case ReturnStatement(expr) =>
+      throw new FunctionReturn(expr.map(evaluateExpression))
+
+    case ExitStatement() =>
+      throw new LoopExitException()
+
+    case ExpressionStatement(expr) =>
+      evaluateExpression(expr)
+  }
+
+  private def evaluateExpression(expr: Expression): Any = expr match {
+    case Literal(value) => value
+
+    case Variable(name) => environment.getVariable(name)
+
+    case Binary(operation, left, right) =>
+      val leftVal  = evaluateExpression(left)
+      val rightVal = evaluateExpression(right)
+      evaluateBinary(operation, leftVal, rightVal)
+
+    case Unary(operation, right) =>
+      val rightVal = evaluateExpression(right)
+      evaluateUnary(operation, rightVal)
+
+    case FunctionCall(target, args) =>
+      val func      = evaluateExpression(target)
+      val argValues = args.map(evaluateExpression)
+      callFunction(func, argValues)
+
+    case ArrayAccess(target, index) =>
+      val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
+      val idx = evaluateExpression(index) match {
+        case l: Long => l.toInt
+        case i: Int  => i
+        case _       => throw new RuntimeException("Array index must be an integer")
+      }
+      if (idx > arr.length) {
+        throw new RuntimeException(s"Array index $idx out of bounds for array of length ${arr.length}")
+      }
+      arr(idx - 1)
+
+    case ArrayLiteral(elements) =>
+      ArrayBuffer.from(elements.map(evaluateExpression))
+
+    case TupleLiteral(elements) =>
+      val map   = mutable.Map[String, Any]()
+      var index = 1
+      for (entry <- elements) {
+        val value = evaluateExpression(entry.value)
+        entry.key.foreach(key => map(key) = value)
+        map(index.toString) = value
+        index += 1
+      }
+      map.toMap
+
+    case TupleFieldAccess(target, field) =>
+      val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
+      tuple.getOrElse(field, throw new RuntimeException(s"Tuple field '$field' not found"))
+
+    case TupleIndexAccess(target, index) =>
+      val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
+      tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
+
+    case FunctionLiteral(args, body) =>
+      val capturedEnv = environment // стек на момент определения функции
+      (argValues: List[Any]) => {
+        if (argValues.length != args.length) {
+          throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
+        }
+        // создаём окружение вызова, замкнутое на capturedEnv
+        val funcEnv   = new Stack(Some(capturedEnv))
+        val oldEnvRef = environment
+        environment = funcEnv
+        // новый слой для параметров
+        environment.addLayer()
+        for ((arg, value) <- args.zip(argValues)) {
+          environment.defineVariable(arg.value, value)
+        }
+        try {
+          try {
+            executeBlock(body)
+            None
+          } catch {
+            case fr: FunctionReturn => fr.value.getOrElse(None)
+          }
+        } finally {
+          environment = oldEnvRef
+        }
+      }
+
+    case LambdaLiteral(args, body) =>
+      val capturedEnv = environment
+      (argValues: List[Any]) => {
+        if (argValues.length != args.length) {
+          throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
+        }
+        val funcEnv   = new Stack(Some(capturedEnv))
+        val oldEnvRef = environment
+        environment = funcEnv
+        environment.addLayer()
+        for ((arg, value) <- args.zip(argValues)) {
+          environment.defineVariable(arg.value, value)
+        }
+        try {
           try {
             evaluateExpression(body)
-          } finally {
-            environment = oldEnv
+          } catch {
+            case fr: FunctionReturn => fr.value.getOrElse(None)
           }
+        } finally {
+          environment = oldEnvRef
         }
+      }
 
-      case TypeCheck(expression, typeIndicator) =>
-        val value = evaluateExpression(expression)
-        checkType(value, typeIndicator)
+    case TypeCheck(expression, typeIndicator) =>
+      val value = evaluateExpression(expression)
+      checkType(value, typeIndicator)
 
-      case _ => throw new RuntimeException(s"Unsupported expression: $expr")
-    }
+    case _ => throw new RuntimeException(s"Unsupported expression: $expr")
   }
 
   private def evaluateBinary(operation: Code, left: Any, right: Any): Any = {

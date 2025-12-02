@@ -463,5 +463,22 @@ class InterpreterTest extends AnyFunSuite {
     val output = interpretCode(code)
     assert(output == "{a:=1, b:=2, c:={g:=2, 1:=2, 2:=\"h\"}, 1:=1, 2:=2, 3:={g:=2, 1:=2, 2:=\"h\"}}")
   }
+
+  test("handle function recursion") {
+    val code=
+      """var f := func(a) is
+        |    print a
+        |    if a = 3  then
+        |        return
+        |    end
+        |    f(a+1)
+        |end
+        |f(1)
+        |""".stripMargin
+
+    val output = interpretCode(code)
+
+    assert(output == "123")
+  }
 }
 
