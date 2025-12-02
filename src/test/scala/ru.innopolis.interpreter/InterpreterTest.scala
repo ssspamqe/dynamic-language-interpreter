@@ -444,5 +444,24 @@ class InterpreterTest extends AnyFunSuite {
     val output = interpretCode(code)
     assert(output == "")
   }
+
+  test("print array") {
+    val code =
+      """var a := ["a", "b", 1, 2]
+        |var t := {a:=1, b:=2, c+d};
+        |print a
+        """.stripMargin
+    val output = interpretCode(code)
+    assert(output == "[\"a\", \"b\", 1, 2]")
+  }
+
+  test("print tuple") {
+    val code =
+      """var t := {a:=1, b:=2, c := {g := 2, "h"}};
+        |print t
+        """.stripMargin
+    val output = interpretCode(code)
+    assert(output == "{a:=1, b:=2, c:={g:=2, 1:=2, 2:=\"h\"}, 1:=1, 2:=2, 3:={g:=2, 1:=2, 2:=\"h\"}}")
+  }
 }
 
