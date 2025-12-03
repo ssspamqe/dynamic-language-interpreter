@@ -1,9 +1,12 @@
 package ru.innopolis.interpreter
 
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers.{a, convertToAnyShouldWrapper}
 import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
+import ru.innopolis.interpreter.exception.SemanticCheckException
 import ru.innopolis.interpreter.runtime.Interpreter
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
+import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticCheckAnalyzer
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 
@@ -16,6 +19,8 @@ class InterpreterTest extends AnyFunSuite {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val ast = parser.parse()
+    val checker = new SemanticCheckAnalyzer()
+    checker.analyze(ast)
     val optimizedAst = Optimizer.optimize(ast)
 
     val out = new ByteArrayOutputStream()
@@ -221,12 +226,14 @@ class InterpreterTest extends AnyFunSuite {
     // Empty array should print as empty or array representation
     assert(output.nonEmpty)
   }
-//
-//  test("interpret variable scope") {
-//    val code = "var x := 10\nif true then\n    var x := 20\n    print x\nend\nprint x"
-//    val output = interpretCode(code)
-//    assert(output == "2010")
-//  }
+
+  test("interpret variable scope") {
+    val code = "var x := 10\nif true then\n    var x := 20\n    print x\nend\nprint x"
+
+    val exception = intercept[SemanticCheckException](interpretCode(code))
+
+    exception shouldBe a[SemanticCheckException]
+  }
 
   test("interpret infinite loop with exit") {
     val code =
