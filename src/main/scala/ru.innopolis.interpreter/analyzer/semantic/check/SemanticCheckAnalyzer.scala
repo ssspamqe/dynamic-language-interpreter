@@ -198,7 +198,7 @@ class SemanticCheckAnalyzer {
 
   private def validateDeclaration(name: String): Unit = {
     if (!isDeclared(name)) {
-      throw new SemanticCheckException(s"Identifier '$name' not declared")
+      throw new SemanticCheckException(s"Identifier '$name' was not declared")
     }
   }
 

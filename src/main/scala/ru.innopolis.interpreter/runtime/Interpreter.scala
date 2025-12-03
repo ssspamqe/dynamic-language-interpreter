@@ -17,22 +17,15 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
 class Interpreter {
-  private var environment = new Stack()
+  private var stack = new Stack()
 
   def interpret(block: CodeBlock): Unit = {
-    environment = new Stack()
+    stack = new Stack()
     executeBlock(block)
   }
 
   private def executeBlock(block: CodeBlock): Unit = {
-    // просто выполняем операторы в текущем environment (слоями управляют вызывающие)
     block.statements.foreach(executeStatement)
-  }
-
-  private def withNewLayer[A](body: => A): A = {
-    environment.addLayer()
-    try body
-    finally environment.popLayer()
   }
 
   private def executeStatement(stmt: Statement): Unit = stmt match {
@@ -43,12 +36,12 @@ class Interpreter {
     case VariableDeclaration(declarations) =>
       declarations.foreach { case (name, expr) =>
         val value = evaluateExpression(expr)
-        environment.defineVariable(name, value)
+        stack.defineVariable(name, value)
       }
 
     case VariableAssignment(name, expr) =>
       val value = evaluateExpression(expr)
-      environment.setVariable(name, value)
+      stack.setVariable(name, value)
 
     case ArrayElementAssignment(target, index, value) =>
       val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
@@ -70,13 +63,9 @@ class Interpreter {
         case _ => throw new RuntimeException("Condition must be a boolean")
       }
       if (condValue) {
-        withNewLayer {
-          executeBlock(trueBranch)
-        }
+        executeBlock(trueBranch)
       } else {
-        falseBranch.foreach(b => withNewLayer {
-          executeBlock(b)
-        })
+        falseBranch.foreach(executeBlock)
       }
 
     case WhileLoop(condition, body) =>
@@ -88,9 +77,7 @@ class Interpreter {
           }
           if (!condValue) break
           try {
-            withNewLayer {
-              executeBlock(body)
-            }
+            executeBlock(body)
           } catch {
             case _: LoopExitBreak => break
             case fr: FunctionReturnBreak => throw fr // пробрасываем return наружу
@@ -112,10 +99,8 @@ class Interpreter {
       breakable {
         for (i <- fromValue to toValue) {
           try {
-            withNewLayer {
-              ident.foreach(name => environment.defineVariable(name, i))
-              executeBlock(body)
-            }
+            ident.foreach(name => stack.defineVariable(name, i))
+            executeBlock(body)
           } catch {
             case _: LoopExitBreak => break
             case fr: FunctionReturnBreak => throw fr
@@ -130,10 +115,8 @@ class Interpreter {
           case arr: ArrayBuffer[Any] =>
             for (elem <- arr) {
               try {
-                withNewLayer {
-                  environment.defineVariable(ident, elem)
-                  executeBlock(body)
-                }
+                stack.defineVariable(ident, elem)
+                executeBlock(body)
               } catch {
                 case _: LoopExitBreak => break
                 case fr: FunctionReturnBreak => throw fr
@@ -142,10 +125,8 @@ class Interpreter {
           case list: List[Any] =>
             for (elem <- list) {
               try {
-                withNewLayer {
-                  environment.defineVariable(ident, elem)
-                  executeBlock(body)
-                }
+                stack.defineVariable(ident, elem)
+                executeBlock(body)
               } catch {
                 case _: LoopExitBreak => break
                 case fr: FunctionReturnBreak => throw fr
@@ -159,9 +140,7 @@ class Interpreter {
       breakable {
         while (true) {
           try {
-            withNewLayer {
-              executeBlock(loop.body)
-            }
+            executeBlock(loop.body)
           } catch {
             case _: LoopExitBreak => break
             case fr: FunctionReturnBreak => throw fr
@@ -182,7 +161,7 @@ class Interpreter {
   private def evaluateExpression(expr: Expression): Any = expr match {
     case Literal(value) => value
 
-    case Variable(name) => environment.getVariable(name)
+    case Variable(name) => stack.getVariable(name)
 
     case Binary(operation, left, right) =>
       val leftVal = evaluateExpression(left)
@@ -194,6 +173,7 @@ class Interpreter {
       evaluateUnary(operation, rightVal)
 
     case FunctionCall(target, args) =>
+      // Вызываем функцию: создаём новый фрейм, кладём в него параметры, выполняем тело и затем снимаем фрейм.
       val func = evaluateExpression(target)
       val argValues = args.map(evaluateExpression)
       callFunction(func, argValues)
@@ -233,19 +213,19 @@ class Interpreter {
       tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
 
     case FunctionLiteral(args, body) =>
-      val capturedEnv = environment // стек на момент определения функции
+      val capturedEnv = stack
       (argValues: List[Any]) => {
         if (argValues.length != args.length) {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
-        // создаём окружение вызова, замкнутое на capturedEnv
+        // Новый стек для функции с замыканием на окружающее окружение
         val funcEnv = new Stack(Some(capturedEnv))
-        val oldEnvRef = environment
-        environment = funcEnv
-        // новый слой для параметров
-        environment.addLayer()
+        val oldEnvRef = stack
+        stack = funcEnv
+        // Новый фрейм для параметров функции
+        stack.pushFrame()
         for ((arg, value) <- args.zip(argValues)) {
-          environment.defineVariable(arg.value, value)
+          stack.defineVariable(arg.value, value)
         }
         try {
           try {
@@ -255,22 +235,24 @@ class Interpreter {
             case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
-          environment = oldEnvRef
+          // Снимаем фрейм функции и возвращаемся к старому окружению
+          stack.popFrame()
+          stack = oldEnvRef
         }
       }
 
     case LambdaLiteral(args, body) =>
-      val capturedEnv = environment
+      val capturedEnv = stack
       (argValues: List[Any]) => {
         if (argValues.length != args.length) {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
         val funcEnv = new Stack(Some(capturedEnv))
-        val oldEnvRef = environment
-        environment = funcEnv
-        environment.addLayer()
+        val oldEnvRef = stack
+        stack = funcEnv
+        stack.pushFrame()
         for ((arg, value) <- args.zip(argValues)) {
-          environment.defineVariable(arg.value, value)
+          stack.defineVariable(arg.value, value)
         }
         try {
           try {
@@ -279,7 +261,8 @@ class Interpreter {
             case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
-          environment = oldEnvRef
+          stack.popFrame()
+          stack = oldEnvRef
         }
       }
 
