@@ -1,0 +1,18 @@
+var class := {
+    init := func() => "not implemented init"
+}
+
+var obj := class.init()
+print obj, "\n"
+
+var classAnimal := class + {
+    init := func(name, age) is
+        return classAnimal + {name := name, age := age}
+    end
+}
+
+var dog := classAnimal.init("Тузик", 3)
+var cat := classAnimal.init("Пушистик", 5)
+
+print dog, "\n"
+print cat, "\n"
