@@ -115,12 +115,12 @@ class ExpressionParser(private val stream: TokenStream) {
 
       case Code.SQUARE_BRACKET_LEFT =>
         stream.next()
-        stream.expect(Code.SQUARE_BRACKET_RIGHT)
+        expectCodeSkippingNewLines(Code.SQUARE_BRACKET_RIGHT)
         TypeIndicator.ArrayType
 
       case Code.CURLY_BRACKET_LEFT =>
         stream.next()
-        stream.expect(Code.CURLY_BRACKET_RIGHT)
+        expectCodeSkippingNewLines(Code.CURLY_BRACKET_RIGHT)
         TypeIndicator.TupleType
 
       case Code.FUNC =>
@@ -133,7 +133,10 @@ class ExpressionParser(private val stream: TokenStream) {
   }
 
   private def parsePrimary(): Expression = {
-    if (!stream.hasNext) throw new UnexpectedTokenException(null, null)
+    while (stream.hasNext && stream.current.code == Code.NEWLINE) {
+      stream.next()
+    }
+    if (!stream.hasNext) throw new UnexpectedEndOfInputException(context = "parsing expression")
 
     val tok = stream.next()
     val isIdent = tok.code == Code.IDENTIFIER
@@ -157,7 +160,7 @@ class ExpressionParser(private val stream: TokenStream) {
 
       case Code.ROUND_BRACKET_LEFT =>
         val inner = parseExpression()
-        stream.expect(Code.ROUND_BRACKET_RIGHT)
+        expectCodeSkippingNewLines(Code.ROUND_BRACKET_RIGHT)
         inner
 
       case Code.SQUARE_BRACKET_LEFT =>
@@ -202,7 +205,7 @@ class ExpressionParser(private val stream: TokenStream) {
           args ::= Variable(stream.next().value.toString)
         }
       }
-      stream.expect(Code.ROUND_BRACKET_RIGHT)
+      expectCodeSkippingNewLines(Code.ROUND_BRACKET_RIGHT)
     }
 
     val bodyParser = new AASTParser(stream)
@@ -213,7 +216,7 @@ class ExpressionParser(private val stream: TokenStream) {
       if (!stream.hasNext) {
         throw new UnexpectedEndOfInputException(Code.END, ParseContext.FunctionDeclaration.description)
       }
-      stream.expect(Code.END)
+      expectCodeSkippingNewLines(Code.END)
       FunctionLiteral(args.reverse, codeBlock)
     } else if (stream.hasNext && stream.current.code == Code.LAMBDA) {
       stream.next()
@@ -227,26 +230,30 @@ class ExpressionParser(private val stream: TokenStream) {
   private def parseArrayElements(): List[Expression] = {
     var elements = List.empty[Expression]
     if (stream.hasNext && stream.current.code != Code.SQUARE_BRACKET_RIGHT) {
+      skipAllTokensOfCode(Code.NEWLINE)
       elements ::= parseExpression()
       while (stream.hasNext && stream.current.code == Code.COMMA) {
         stream.next()
+        skipAllTokensOfCode(Code.NEWLINE)
         elements ::= parseExpression()
       }
     }
-    stream.expect(Code.SQUARE_BRACKET_RIGHT)
+    expectCodeSkippingNewLines(Code.SQUARE_BRACKET_RIGHT)
     elements.reverse
   }
 
   private def parseTupleElements(): List[(Option[String], Expression)] = {
     var elements = List.empty[(Option[String], Expression)]
     if (stream.hasNext && stream.current.code != Code.CURLY_BRACKET_RIGHT) {
+      skipAllTokensOfCode(Code.NEWLINE)
       elements ::= parseTupleElement()
       while (stream.hasNext && stream.current.code == Code.COMMA) {
         stream.next()
+        skipAllTokensOfCode(Code.NEWLINE)
         elements ::= parseTupleElement()
       }
     }
-    stream.expect(Code.CURLY_BRACKET_RIGHT)
+    expectCodeSkippingNewLines(Code.CURLY_BRACKET_RIGHT)
     elements.reverse
   }
 
@@ -270,24 +277,35 @@ class ExpressionParser(private val stream: TokenStream) {
         args ::= parseExpression()
       }
     }
-    stream.expect(Code.ROUND_BRACKET_RIGHT)
+    expectCodeSkippingNewLines(Code.ROUND_BRACKET_RIGHT)
     FunctionCall(expr, args.reverse)
   }
 
   private def parseArrayAccess(expr: Expression): Expression = {
     stream.next()
     val idxExpr = parseExpression()
-    stream.expect(Code.SQUARE_BRACKET_RIGHT)
+    expectCodeSkippingNewLines(Code.SQUARE_BRACKET_RIGHT)
     ArrayAccess(expr, idxExpr)
   }
 
   private def parseDotAccess(expr: Expression): Expression = {
-    stream.expect(Code.DOT)
+    expectCodeSkippingNewLines(Code.DOT)
     val fieldTok = stream.next()
     fieldTok.code match {
       case Code.IDENTIFIER => TupleFieldAccess(expr, fieldTok.value.toString)
       case Code.INT_LITERAL => TupleIndexAccess(expr, fieldTok.value.toString.toInt)
       case _ => throw new InvalidTokenException(fieldTok)
     }
+  }
+
+  private def skipAllTokensOfCode(code: Code): Unit = {
+    while (stream.hasNext && stream.current.code == code) {
+      stream.next()
+    }
+  }
+
+  private def expectCodeSkippingNewLines(code:Code): Unit = {
+    skipAllTokensOfCode(Code.NEWLINE)
+    stream.expect(code)
   }
 }
