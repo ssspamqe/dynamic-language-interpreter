@@ -1,0 +1,16 @@
+var fib := func(n) is
+    if n = 0 then
+        return 0
+    end
+
+    if n = 1 then
+        return 1
+    end
+
+    return fib(n - 1) + fib(n - 2)
+end
+
+print fib(0), "\n"
+print fib(1), "\n"
+print fib(5), "\n"
+print fib(10), "\n"
