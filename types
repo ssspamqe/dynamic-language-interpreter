@@ -1,0 +1,44 @@
+var describeFlat := func(x) is
+
+    if x is [ ] then
+        print "array ["
+        var idx := 0
+        for v in x loop
+            print "  [" + idx + "] = "
+            if v is string then print "string"
+            else
+                if v is bool then print "bool"
+                else
+                    if v is int then print "int"
+                    else
+                        if v is real then print "real"
+                        else
+                            if v is [ ] then print "array"
+                            else
+                                if v is { } then print "tuple"
+                                else print "unknown"
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            idx := idx + 1
+            print "\n"
+        end
+        print "]"
+    else
+        print "Ожидался array!"
+    end
+end
+
+var data := [
+    10,
+    true,
+    [1,2,3],
+    { x := 1, y := 2 },
+    "строка",
+    3.14
+]
+
+describeFlat(data)
