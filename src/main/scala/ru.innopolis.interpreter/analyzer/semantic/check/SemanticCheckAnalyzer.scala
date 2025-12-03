@@ -33,11 +33,12 @@ class SemanticCheckAnalyzer {
 
   private def checkStatement(stmt: Statement): Unit = stmt match {
     case VariableDeclaration(name, expr) =>
-      checkExpression(expr)
-      if (isDeclared(name)){
+      // объявляем имя ДО проверки expr, чтобы оно было видно внутри инициализатора (как в рантайм-стеке)
+      if (isDeclared(name)) {
         throw new SemanticCheckException(s"Variable '$name' was already declared before")
       }
       declareVariable(name)
+      checkExpression(expr)
 
     case VariableAssignment(name, expr) =>
       checkExpression(expr)
