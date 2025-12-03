@@ -9,60 +9,15 @@ import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.loop._
 
-/*
-Possible Optimizations
-Here are some common optimizations you might want to implement. These optimizations modify the AST:
-1. Constant Expression Simplification: Simplify constant expressions during compilation. For example, a = 5 + 3 can be reduced to a = 8, and expressions like 3 < 5 can be replaced with True.
-2. Removing Unused Variables: If variables are declared but never used in the program, they can be safely removed to reduce code clutter.
-3. Function Inlining: Replace function calls with the function body itself to reduce the overhead of function calls.
-Example: Before inlining:
-  func foo(a : Integer) {
-    print("Hello")
-    print(a)
-  }
-
-  func main() {
-    a : Integer = 1
-    foo(a)
-
-    foo(2)
-  }
-After inlining:
-  func main() {
-    a : Integer = 1
-    print("Hello") // inlined foo(a)
-    print(a)
-
-    print("Hello") // inlined foo(2)
-    print(2)
-  }
-4. Code simplification: Simplify conditional structures where possible.
-  Example: Before:
-  if (True) {
-    print("Hello")
-    print("There")
-  }
-  else {
-    print("Otherwise")
-  }
-  After simplification:
-  print("Hello") // if branch is always true. Completely remove else branch and replace the whole if structure with its body.
-  print("There")
-5. Removing Unreachable Code: Remove any code that will never be executed. For instance, code after a return statement:
-  func foo() {
-    return 0
-    print("Hello") // this is unreachable code and can be removed at compile time
-  }
- */
-
 object Optimizer {
 
   def optimize(e: CodeBlock): CodeBlock = {
-    // evaluate constants
     val optimizedStatements = e.statements.foldLeft(List[Statement]())((ss, s) => s match {
       case e: ArrayElementAssignment => ss :+ ArrayElementAssignment(optimizeExpr(e.target), optimizeExpr(e.index), optimizeExpr(e.value))
       case e: VariableAssignment => ss :+ VariableAssignment(e.name, optimizeExpr(e.value))
-      case e: VariableDeclaration => ss :+ VariableDeclaration(e.name, optimizeExpr(e.expression))
+      case e: VariableDeclaration =>
+        val optimizedDecls = e.declarations.map { case (name, expr) => (name, optimizeExpr(expr)) }
+        ss :+ VariableDeclaration(optimizedDecls)
       case e: CollectionLoop => ss :+ CollectionLoop(e.ident, optimizeExpr(e.collection), optimize(e.body))
       case e: RangeLoop => ss :+ RangeLoop(e.ident, optimizeExpr(e.from), optimizeExpr(e.to), optimize(e.body))
       case e: WhileLoop => ss :+ WhileLoop(optimizeExpr(e.condition), optimize(e.body))
@@ -74,16 +29,21 @@ object Optimizer {
       case _ => ss :+ s
     })
 
-    // remove unused variables
     val usedVariables = collectUsedVariables(optimizedStatements)
-    val filteredStatements = optimizedStatements.flatMap {
-      case vd@VariableDeclaration(name, expr) =>
-        if (usedVariables.contains(name)) Some(vd)
-        else {
-          if (hasSideEffect(expr)) Some(ExpressionStatement(expr))
-          else None
-        }
-      case other => Some(other)
+    val filteredStatements: List[Statement] = optimizedStatements.flatMap {
+      case VariableDeclaration(decls) =>
+        val (used, unused) = decls.partition { case (name, _) => usedVariables.contains(name) }
+
+        val keptDecls: List[Statement] =
+          if (used.nonEmpty) List(VariableDeclaration(used))
+          else Nil
+
+        val sideEffectStmts: List[Statement] =
+          unused.collect { case (_, expr) if hasSideEffect(expr) => ExpressionStatement(expr) }
+
+        keptDecls ++ sideEffectStmts
+
+      case other => List(other)
     }
 
     CodeBlock(filteredStatements)
@@ -214,7 +174,7 @@ object Optimizer {
 
     statements.flatMap {
       case ExpressionStatement(expr) => collectExpr(expr)
-      case VariableDeclaration(_, expr) => collectExpr(expr)
+      case VariableDeclaration(decls) => decls.flatMap { case (_, expr) => collectExpr(expr) }
       case ArrayElementAssignment(t, i, v) => collectExpr(t) ++ collectExpr(i) ++ collectExpr(v)
       case VariableAssignment(name, exp) => Set(name) ++ collectExpr(exp)
       case CollectionLoop(_, c, body) => collectExpr(c) ++ collectUsedVariables(body.statements)

@@ -107,7 +107,7 @@ class OptimizerTest extends AnyFunSuite {
     val xorResult = Optimizer.optimize(parse(xorTokens))
 
     andResult shouldBe CodeBlock(List(
-      VariableDeclaration("a", Literal(false)),
+      VariableDeclaration(List(("a", Literal(false)))),
       ExpressionStatement(Variable("a"))
     ))
     orResult shouldBe CodeBlock(List(ExpressionStatement(Literal(true))))
@@ -278,14 +278,14 @@ class OptimizerTest extends AnyFunSuite {
 
   test("optimize variable declaration with constant expression") {
     val block = CodeBlock(List(
-      VariableDeclaration("a", Binary(Code.MINUS, Literal(10), Literal(5))),
+      VariableDeclaration(List(("a", Binary(Code.MINUS, Literal(10), Literal(5))))),
       ExpressionStatement(Variable("a"))
     ))
 
     val result = Optimizer.optimize(block)
 
     result shouldBe CodeBlock(List(
-      VariableDeclaration("a", Literal(5.0)),
+      VariableDeclaration(List(("a", Literal(5.0)))),
       ExpressionStatement(Variable("a"))
     ))
   }
@@ -413,7 +413,7 @@ class OptimizerTest extends AnyFunSuite {
     val result = Optimizer.optimize(parse(tokens))
 
     val hasY = result.statements.exists {
-      case VariableDeclaration(name, _) => name == "y"
+      case VariableDeclaration(List((name, _))) => name == "y"
       case VariableAssignment(name, _) => name == "y"
       case _ => false
     }
@@ -433,7 +433,7 @@ class OptimizerTest extends AnyFunSuite {
     val result = Optimizer.optimize(parse(tokens))
 
     val declNames = result.statements.collect {
-      case VariableDeclaration(name, _) => name
+      case VariableDeclaration(List((name, _))) => name
     }
 
     declNames should contain("x")
@@ -474,7 +474,7 @@ class OptimizerTest extends AnyFunSuite {
     val result = Optimizer.optimize(parse(tokens))
 
     val declNames = result.statements.collect {
-      case VariableDeclaration(name, _) => name
+      case VariableDeclaration(List((name, _))) => name
     }.toSet
 
     declNames shouldBe Set("b")
@@ -492,7 +492,7 @@ class OptimizerTest extends AnyFunSuite {
     val result = Optimizer.optimize(parse(tokens))
 
     val declNames = result.statements.collect {
-      case VariableDeclaration(name, _) => name
+      case VariableDeclaration(List((name, _))) => name
     }.toSet
 
     declNames shouldBe Set("x")
@@ -509,7 +509,7 @@ class OptimizerTest extends AnyFunSuite {
     val result = Optimizer.optimize(parse(tokens))
 
     val declNames = result.statements.collect {
-      case VariableDeclaration(name, _) => name
+      case VariableDeclaration(List((name, _))) => name
     }.toSet
 
     declNames shouldBe Set("x")
@@ -527,7 +527,7 @@ class OptimizerTest extends AnyFunSuite {
     val result = Optimizer.optimize(parse(tokens))
 
     val declNames = result.statements.collect {
-      case VariableDeclaration(name, _) => name
+      case VariableDeclaration(List((name, _))) => name
     }.toSet
 
     declNames shouldBe Set()
@@ -596,7 +596,7 @@ class OptimizerTest extends AnyFunSuite {
         |""".stripMargin)
     val ast = Optimizer.optimize(tokens)
     ast.statements.exists{
-      case VariableDeclaration("f1", _) => true
+      case VariableDeclaration(List(("f1", _))) => true
       case _ => false
     } shouldBe false
   }

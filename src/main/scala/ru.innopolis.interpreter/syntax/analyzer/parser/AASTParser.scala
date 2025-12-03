@@ -59,10 +59,24 @@ class AASTParser(private val stream: TokenStream) {
 
   private def parseVariableDeclaration(): VariableDeclaration = {
     stream.expect(Code.VAR)
-    val id = stream.expect(Code.IDENTIFIER)
+    val declarations = scala.collection.mutable.ListBuffer.empty[(String, Expression)]
+
+    // parse first name := expr pair
+    val firstId = stream.expect(Code.IDENTIFIER)
     stream.expect(Code.ASSIGNMENT)
-    val expr = exprParser.parseExpression()
-    VariableDeclaration(id.value.toString, expr)
+    val firstExpr = exprParser.parseExpression()
+    declarations += ((firstId.value.toString, firstExpr))
+
+    // parse optional ", name := expr" sequences
+    while (stream.hasNext && stream.current.code == Code.COMMA) {
+      stream.next() // consume comma
+      val id = stream.expect(Code.IDENTIFIER)
+      stream.expect(Code.ASSIGNMENT)
+      val expr = exprParser.parseExpression()
+      declarations += ((id.value.toString, expr))
+    }
+
+    VariableDeclaration(declarations.toList)
   }
 
   private def parseAssignment(lhs: Expression): Statement = {

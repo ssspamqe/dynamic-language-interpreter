@@ -40,9 +40,11 @@ class Interpreter {
       val values = expressions.map(e => formatValue(evaluateExpression(e)))
       print(values.mkString(" "))
 
-    case VariableDeclaration(name, expr) =>
-      val value = evaluateExpression(expr)
-      environment.defineVariable(name, value)
+    case VariableDeclaration(declarations) =>
+      declarations.foreach { case (name, expr) =>
+        val value = evaluateExpression(expr)
+        environment.defineVariable(name, value)
+      }
 
     case VariableAssignment(name, expr) =>
       val value = evaluateExpression(expr)
