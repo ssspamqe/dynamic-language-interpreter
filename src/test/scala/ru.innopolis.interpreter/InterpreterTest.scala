@@ -455,7 +455,7 @@ class InterpreterTest extends AnyFunSuite {
   test("print array") {
     val code =
       """var a := ["a", "b", 1, 2]
-        |var t := {a:=1, b:=2, c+d};
+        |var t := {a:=1, b:=2, 1+10};
         |print a
         """.stripMargin
     val output = interpretCode(code)

@@ -17,10 +17,12 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
 class Interpreter {
-  private var stack = new Stack()
+  private case object Uninitialized
+
+  private var environment = new Stack()
 
   def interpret(block: CodeBlock): Unit = {
-    stack = new Stack()
+    environment = new Stack()
     executeBlock(block)
   }
 
@@ -30,18 +32,20 @@ class Interpreter {
 
   private def executeStatement(stmt: Statement): Unit = stmt match {
     case PrintStatement(expressions) =>
-      val values = expressions.map(e => formatValue(evaluateExpression(e)))
+      // Для печати используем версию, допускающую Uninitialized,
+      // чтобы переменные без значения выводились как none.
+      val values = expressions.map(e => formatValue(evaluateExpressionAllowUninitialized(e)))
       print(values.mkString(" "))
 
     case VariableDeclaration(declarations) =>
-      declarations.foreach { case (name, expr) =>
-        val value = evaluateExpression(expr)
-        stack.defineVariable(name, value)
+      declarations.foreach { case (name, exprOpt) =>
+        val value = exprOpt.map(evaluateExpression).getOrElse(Uninitialized)
+        environment.defineVariable(name, value)
       }
 
     case VariableAssignment(name, expr) =>
       val value = evaluateExpression(expr)
-      stack.setVariable(name, value)
+      environment.setVariable(name, value)
 
     case ArrayElementAssignment(target, index, value) =>
       val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
@@ -99,7 +103,7 @@ class Interpreter {
       breakable {
         for (i <- fromValue to toValue) {
           try {
-            ident.foreach(name => stack.defineVariable(name, i))
+            ident.foreach(name => environment.defineVariable(name, i))
             executeBlock(body)
           } catch {
             case _: LoopExitBreak => break
@@ -115,7 +119,7 @@ class Interpreter {
           case arr: ArrayBuffer[Any] =>
             for (elem <- arr) {
               try {
-                stack.defineVariable(ident, elem)
+                environment.defineVariable(ident, elem)
                 executeBlock(body)
               } catch {
                 case _: LoopExitBreak => break
@@ -125,7 +129,7 @@ class Interpreter {
           case list: List[Any] =>
             for (elem <- list) {
               try {
-                stack.defineVariable(ident, elem)
+                environment.defineVariable(ident, elem)
                 executeBlock(body)
               } catch {
                 case _: LoopExitBreak => break
@@ -161,7 +165,13 @@ class Interpreter {
   private def evaluateExpression(expr: Expression): Any = expr match {
     case Literal(value) => value
 
-    case Variable(name) => stack.getVariable(name)
+    case Variable(name) =>
+      val value = environment.getVariable(name)
+      value match {
+        case Uninitialized =>
+          throw new RuntimeException(s"Variable '$name' has no value!")
+        case other => other
+      }
 
     case Binary(operation, left, right) =>
       val leftVal = evaluateExpression(left)
@@ -213,19 +223,19 @@ class Interpreter {
       tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
 
     case FunctionLiteral(args, body) =>
-      val capturedEnv = stack
+      val capturedEnv = environment
       (argValues: List[Any]) => {
         if (argValues.length != args.length) {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
         // Новый стек для функции с замыканием на окружающее окружение
         val funcEnv = new Stack(Some(capturedEnv))
-        val oldEnvRef = stack
-        stack = funcEnv
+        val oldEnvRef = environment
+        environment = funcEnv
         // Новый фрейм для параметров функции
-        stack.pushFrame()
+        environment.pushFrame()
         for ((arg, value) <- args.zip(argValues)) {
-          stack.defineVariable(arg.value, value)
+          environment.defineVariable(arg.value, value)
         }
         try {
           try {
@@ -236,23 +246,23 @@ class Interpreter {
           }
         } finally {
           // Снимаем фрейм функции и возвращаемся к старому окружению
-          stack.popFrame()
-          stack = oldEnvRef
+          environment.popFrame()
+          environment = oldEnvRef
         }
       }
 
     case LambdaLiteral(args, body) =>
-      val capturedEnv = stack
+      val capturedEnv = environment
       (argValues: List[Any]) => {
         if (argValues.length != args.length) {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
         val funcEnv = new Stack(Some(capturedEnv))
-        val oldEnvRef = stack
-        stack = funcEnv
-        stack.pushFrame()
+        val oldEnvRef = environment
+        environment = funcEnv
+        environment.pushFrame()
         for ((arg, value) <- args.zip(argValues)) {
-          stack.defineVariable(arg.value, value)
+          environment.defineVariable(arg.value, value)
         }
         try {
           try {
@@ -261,16 +271,26 @@ class Interpreter {
             case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
-          stack.popFrame()
-          stack = oldEnvRef
+          environment.popFrame()
+          environment = oldEnvRef
         }
       }
 
     case TypeCheck(expression, typeIndicator) =>
-      val value = evaluateExpression(expression)
+      val value = evaluateExpressionAllowUninitialized(expression)
       checkType(value, typeIndicator)
 
     case _ => throw new RuntimeException(s"Unsupported expression: $expr")
+  }
+
+  // Вспомогательная версия evaluateExpression, которая не бросает ошибку
+  // для Uninitialized, чтобы позволить type check `a is none`.
+  private def evaluateExpressionAllowUninitialized(expr: Expression): Any = expr match {
+    case Variable(name) =>
+      // если переменная не определена вообще, оставляем то же поведение (ошибка "not defined")
+      environment.getVariable(name)
+    case other =>
+      evaluateExpression(other)
   }
 
   private def evaluateBinary(operation: Code, left: Any, right: Any): Any = {
@@ -403,7 +423,7 @@ class Interpreter {
       case TypeIndicator.RealType => value.isInstanceOf[Double] || value.isInstanceOf[Float]
       case TypeIndicator.BoolType => value.isInstanceOf[Boolean]
       case TypeIndicator.StringType => value.isInstanceOf[String]
-      case TypeIndicator.NoneType => value == None
+      case TypeIndicator.NoneType => value == Uninitialized
       case TypeIndicator.ArrayType => value.isInstanceOf[ArrayBuffer[Any]] || value.isInstanceOf[List[Any]]
       case TypeIndicator.TupleType => value.isInstanceOf[Map[_, _]]
       case TypeIndicator.FuncType => value.isInstanceOf[List[Any] => Any]

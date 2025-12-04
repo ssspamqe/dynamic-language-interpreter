@@ -4,6 +4,7 @@ import ru.innopolis.interpreter.lexer._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
+import ru.innopolis.interpreter.syntax.analyzer.tree.expression.types.TypeCheck
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.assignment._
 import ru.innopolis.interpreter.syntax.analyzer.tree.statement.declaration.VariableDeclaration
@@ -16,7 +17,7 @@ object Optimizer {
       case e: ArrayElementAssignment => ss :+ ArrayElementAssignment(optimizeExpr(e.target), optimizeExpr(e.index), optimizeExpr(e.value))
       case e: VariableAssignment => ss :+ VariableAssignment(e.name, optimizeExpr(e.value))
       case e: VariableDeclaration =>
-        val optimizedDecls = e.declarations.map { case (name, expr) => (name, optimizeExpr(expr)) }
+        val optimizedDecls = e.declarations.map { case (name, exprOpt) => (name, exprOpt.map(optimizeExpr)) }
         ss :+ VariableDeclaration(optimizedDecls)
       case e: CollectionLoop => ss :+ CollectionLoop(e.ident, optimizeExpr(e.collection), optimize(e.body))
       case e: RangeLoop => ss :+ RangeLoop(e.ident, optimizeExpr(e.from), optimizeExpr(e.to), optimize(e.body))
@@ -39,7 +40,7 @@ object Optimizer {
           else Nil
 
         val sideEffectStmts: List[Statement] =
-          unused.collect { case (_, expr) if hasSideEffect(expr) => ExpressionStatement(expr) }
+          unused.collect { case (_, Some(expr)) if hasSideEffect(expr) => ExpressionStatement(expr) }
 
         keptDecls ++ sideEffectStmts
 
@@ -162,10 +163,9 @@ object Optimizer {
       case TupleIndexAccess(a, _) => collectExpr(a)
       case Binary(_, l, r) => collectExpr(l) ++ collectExpr(r)
       case Unary(_, e) => collectExpr(e)
-      case FunctionCall(target, args) =>
-        collectExpr(target) ++ args.flatMap(collectExpr).toSet
-      case LambdaLiteral(args, body) => args.flatMap(collectExpr).toSet ++ collectExpr(body)
-      case FunctionLiteral(args, body) => args.flatMap(collectExpr).toSet ++ collectUsedVariables(body.statements)
+      case TypeCheck(inner, _) => collectExpr(inner)
+      case LambdaLiteral(_, body) => collectExpr(body)
+      case FunctionLiteral(_, body) => collectUsedVariables(body.statements)
       case ArrayLiteral(elements) => elements.flatMap(collectExpr).toSet
       case TupleLiteral(entries) => entries.flatMap(e => collectExpr(e.value)).toSet
       case Variable(name) => Set(name)
@@ -174,14 +174,15 @@ object Optimizer {
 
     statements.flatMap {
       case ExpressionStatement(expr) => collectExpr(expr)
-      case VariableDeclaration(decls) => decls.flatMap { case (_, expr) => collectExpr(expr) }
+      case VariableDeclaration(decls) =>
+        decls.flatMap { case (_, exprOpt) => exprOpt.map(collectExpr).getOrElse(Set.empty) }
       case ArrayElementAssignment(t, i, v) => collectExpr(t) ++ collectExpr(i) ++ collectExpr(v)
       case VariableAssignment(name, exp) => Set(name) ++ collectExpr(exp)
       case CollectionLoop(_, c, body) => collectExpr(c) ++ collectUsedVariables(body.statements)
       case RangeLoop(_, f, t, body) => collectExpr(f) ++ collectExpr(t) ++ collectUsedVariables(body.statements)
       case WhileLoop(c, body) => collectExpr(c) ++ collectUsedVariables(body.statements)
       case Loop(body) => collectUsedVariables(body.statements)
-      case IfStatement(c, t, f) => collectExpr(c) ++ collectUsedVariables(t.statements) ++ f.map(f => collectUsedVariables(f.statements)).getOrElse(Set.empty)
+      case IfStatement(c, t, f) => collectExpr(c) ++ collectUsedVariables(t.statements) ++ f.map(fb => collectUsedVariables(fb.statements)).getOrElse(Set.empty)
       case PrintStatement(e) => e.flatMap(collectExpr).toSet
       case _ => Set.empty
     }.toSet
