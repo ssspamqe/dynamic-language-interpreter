@@ -17,6 +17,8 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
 class Interpreter {
+  private case object Uninitialized
+
   private var environment = new Stack()
 
   def interpret(block: CodeBlock): Unit = {
@@ -25,24 +27,19 @@ class Interpreter {
   }
 
   private def executeBlock(block: CodeBlock): Unit = {
-    // просто выполняем операторы в текущем environment (слоями управляют вызывающие)
     block.statements.foreach(executeStatement)
-  }
-
-  private def withNewLayer[A](body: => A): A = {
-    environment.addLayer()
-    try body
-    finally environment.popLayer()
   }
 
   private def executeStatement(stmt: Statement): Unit = stmt match {
     case PrintStatement(expressions) =>
-      val values = expressions.map(e => formatValue(evaluateExpression(e)))
+      // Для печати используем версию, допускающую Uninitialized,
+      // чтобы переменные без значения выводились как none.
+      val values = expressions.map(e => formatValue(evaluateExpressionAllowUninitialized(e)))
       print(values.mkString(" "))
 
     case VariableDeclaration(declarations) =>
-      declarations.foreach { case (name, expr) =>
-        val value = evaluateExpression(expr)
+      declarations.foreach { case (name, exprOpt) =>
+        val value = exprOpt.map(evaluateExpression).getOrElse(Uninitialized)
         environment.defineVariable(name, value)
       }
 
@@ -70,13 +67,9 @@ class Interpreter {
         case _ => throw new RuntimeException("Condition must be a boolean")
       }
       if (condValue) {
-        withNewLayer {
-          executeBlock(trueBranch)
-        }
+        executeBlock(trueBranch)
       } else {
-        falseBranch.foreach(b => withNewLayer {
-          executeBlock(b)
-        })
+        falseBranch.foreach(executeBlock)
       }
 
     case WhileLoop(condition, body) =>
@@ -88,9 +81,7 @@ class Interpreter {
           }
           if (!condValue) break
           try {
-            withNewLayer {
-              executeBlock(body)
-            }
+            executeBlock(body)
           } catch {
             case _: LoopExitBreak => break
             case fr: FunctionReturnBreak => throw fr // пробрасываем return наружу
@@ -112,10 +103,8 @@ class Interpreter {
       breakable {
         for (i <- fromValue to toValue) {
           try {
-            withNewLayer {
-              ident.foreach(name => environment.defineVariable(name, i))
-              executeBlock(body)
-            }
+            ident.foreach(name => environment.defineVariable(name, i))
+            executeBlock(body)
           } catch {
             case _: LoopExitBreak => break
             case fr: FunctionReturnBreak => throw fr
@@ -130,10 +119,8 @@ class Interpreter {
           case arr: ArrayBuffer[Any] =>
             for (elem <- arr) {
               try {
-                withNewLayer {
-                  environment.defineVariable(ident, elem)
-                  executeBlock(body)
-                }
+                environment.defineVariable(ident, elem)
+                executeBlock(body)
               } catch {
                 case _: LoopExitBreak => break
                 case fr: FunctionReturnBreak => throw fr
@@ -142,10 +129,8 @@ class Interpreter {
           case list: List[Any] =>
             for (elem <- list) {
               try {
-                withNewLayer {
-                  environment.defineVariable(ident, elem)
-                  executeBlock(body)
-                }
+                environment.defineVariable(ident, elem)
+                executeBlock(body)
               } catch {
                 case _: LoopExitBreak => break
                 case fr: FunctionReturnBreak => throw fr
@@ -159,9 +144,7 @@ class Interpreter {
       breakable {
         while (true) {
           try {
-            withNewLayer {
-              executeBlock(loop.body)
-            }
+            executeBlock(loop.body)
           } catch {
             case _: LoopExitBreak => break
             case fr: FunctionReturnBreak => throw fr
@@ -182,7 +165,13 @@ class Interpreter {
   private def evaluateExpression(expr: Expression): Any = expr match {
     case Literal(value) => value
 
-    case Variable(name) => environment.getVariable(name)
+    case Variable(name) =>
+      val value = environment.getVariable(name)
+      value match {
+        case Uninitialized =>
+          throw new RuntimeException(s"Variable '$name' has no value!")
+        case other => other
+      }
 
     case Binary(operation, left, right) =>
       val leftVal = evaluateExpression(left)
@@ -194,6 +183,7 @@ class Interpreter {
       evaluateUnary(operation, rightVal)
 
     case FunctionCall(target, args) =>
+      // Вызываем функцию: создаём новый фрейм, кладём в него параметры, выполняем тело и затем снимаем фрейм.
       val func = evaluateExpression(target)
       val argValues = args.map(evaluateExpression)
       callFunction(func, argValues)
@@ -233,17 +223,17 @@ class Interpreter {
       tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
 
     case FunctionLiteral(args, body) =>
-      val capturedEnv = environment // стек на момент определения функции
+      val capturedEnv = environment
       (argValues: List[Any]) => {
         if (argValues.length != args.length) {
           throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
-        // создаём окружение вызова, замкнутое на capturedEnv
+        // Новый стек для функции с замыканием на окружающее окружение
         val funcEnv = new Stack(Some(capturedEnv))
         val oldEnvRef = environment
         environment = funcEnv
-        // новый слой для параметров
-        environment.addLayer()
+        // Новый фрейм для параметров функции
+        environment.pushFrame()
         for ((arg, value) <- args.zip(argValues)) {
           environment.defineVariable(arg.value, value)
         }
@@ -255,6 +245,8 @@ class Interpreter {
             case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
+          // Снимаем фрейм функции и возвращаемся к старому окружению
+          environment.popFrame()
           environment = oldEnvRef
         }
       }
@@ -268,7 +260,7 @@ class Interpreter {
         val funcEnv = new Stack(Some(capturedEnv))
         val oldEnvRef = environment
         environment = funcEnv
-        environment.addLayer()
+        environment.pushFrame()
         for ((arg, value) <- args.zip(argValues)) {
           environment.defineVariable(arg.value, value)
         }
@@ -279,15 +271,26 @@ class Interpreter {
             case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
         } finally {
+          environment.popFrame()
           environment = oldEnvRef
         }
       }
 
     case TypeCheck(expression, typeIndicator) =>
-      val value = evaluateExpression(expression)
+      val value = evaluateExpressionAllowUninitialized(expression)
       checkType(value, typeIndicator)
 
     case _ => throw new RuntimeException(s"Unsupported expression: $expr")
+  }
+
+  // Вспомогательная версия evaluateExpression, которая не бросает ошибку
+  // для Uninitialized, чтобы позволить type check `a is none`.
+  private def evaluateExpressionAllowUninitialized(expr: Expression): Any = expr match {
+    case Variable(name) =>
+      // если переменная не определена вообще, оставляем то же поведение (ошибка "not defined")
+      environment.getVariable(name)
+    case other =>
+      evaluateExpression(other)
   }
 
   private def evaluateBinary(operation: Code, left: Any, right: Any): Any = {
@@ -420,7 +423,7 @@ class Interpreter {
       case TypeIndicator.RealType => value.isInstanceOf[Double] || value.isInstanceOf[Float]
       case TypeIndicator.BoolType => value.isInstanceOf[Boolean]
       case TypeIndicator.StringType => value.isInstanceOf[String]
-      case TypeIndicator.NoneType => value == None
+      case TypeIndicator.NoneType => value == Uninitialized
       case TypeIndicator.ArrayType => value.isInstanceOf[ArrayBuffer[Any]] || value.isInstanceOf[List[Any]]
       case TypeIndicator.TupleType => value.isInstanceOf[Map[_, _]]
       case TypeIndicator.FuncType => value.isInstanceOf[List[Any] => Any]

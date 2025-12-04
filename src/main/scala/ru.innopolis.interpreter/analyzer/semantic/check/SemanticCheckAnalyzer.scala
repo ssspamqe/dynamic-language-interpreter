@@ -33,12 +33,12 @@ class SemanticCheckAnalyzer {
 
   private def checkStatement(stmt: Statement): Unit = stmt match {
     case VariableDeclaration(declarations) =>
-      declarations.foreach { case (name, expr) =>
+      declarations.foreach { case (name, exprOpt) =>
         if (isDeclared(name)) {
           throw new SemanticCheckException(s"Variable '$name' was already declared before")
         }
         declareVariable(name)
-        checkExpression(expr)
+        exprOpt.foreach(checkExpression)
       }
 
     case VariableAssignment(name, expr) =>
@@ -198,7 +198,7 @@ class SemanticCheckAnalyzer {
 
   private def validateDeclaration(name: String): Unit = {
     if (!isDeclared(name)) {
-      throw new SemanticCheckException(s"Identifier '$name' not declared")
+      throw new SemanticCheckException(s"Identifier '$name' was not declared")
     }
   }
 

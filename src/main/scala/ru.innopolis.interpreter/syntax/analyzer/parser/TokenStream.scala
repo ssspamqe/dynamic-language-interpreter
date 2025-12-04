@@ -27,7 +27,7 @@ class TokenStream(tokens: List[Token[_]]) {
     if (!hasNext) throw new UnexpectedEndOfInputException(code)
     val t = next()
     if (t.code != code)
-      throw new UnexpectedTokenException(t, code)
+      throw new UnexpectedTokenException(t, Some(code))
     t
   }
 

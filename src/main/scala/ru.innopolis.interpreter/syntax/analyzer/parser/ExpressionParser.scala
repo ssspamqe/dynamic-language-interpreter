@@ -223,7 +223,7 @@ class ExpressionParser(private val stream: TokenStream) {
       val expr = parseExpression()
       LambdaLiteral(args.reverse, expr)
     } else {
-      throw new UnexpectedTokenException(stream.current, Code.IS)
+      throw new UnexpectedTokenException(stream.current, Some(Code.IS))
     }
   }
 

@@ -59,21 +59,27 @@ class AASTParser(private val stream: TokenStream) {
 
   private def parseVariableDeclaration(): VariableDeclaration = {
     stream.expect(Code.VAR)
-    val declarations = scala.collection.mutable.ListBuffer.empty[(String, Expression)]
+    val declarations = scala.collection.mutable.ListBuffer.empty[(String, Option[Expression])]
 
-    // parse first name := expr pair
+    // parse first identifier, possibly with ":= expr"
     val firstId = stream.expect(Code.IDENTIFIER)
-    stream.expect(Code.ASSIGNMENT)
-    val firstExpr = exprParser.parseExpression()
-    declarations += ((firstId.value.toString, firstExpr))
+    val firstExprOpt: Option[Expression] =
+      if (stream.hasNext && stream.current.code == Code.ASSIGNMENT) {
+        stream.next() // consume ':='
+        Some(exprParser.parseExpression())
+      } else None
+    declarations += ((firstId.value.toString, firstExprOpt))
 
-    // parse optional ", name := expr" sequences
+    // parse optional ", name" or ", name := expr" sequences
     while (stream.hasNext && stream.current.code == Code.COMMA) {
       stream.next() // consume comma
       val id = stream.expect(Code.IDENTIFIER)
-      stream.expect(Code.ASSIGNMENT)
-      val expr = exprParser.parseExpression()
-      declarations += ((id.value.toString, expr))
+      val exprOpt: Option[Expression] =
+        if (stream.hasNext && stream.current.code == Code.ASSIGNMENT) {
+          stream.next()
+          Some(exprParser.parseExpression())
+        } else None
+      declarations += ((id.value.toString, exprOpt))
     }
 
     VariableDeclaration(declarations.toList)
@@ -85,7 +91,7 @@ class AASTParser(private val stream: TokenStream) {
     lhs match {
       case Variable(name) => VariableAssignment(name, valueExpr)
       case ArrayAccess(target, index) => ArrayElementAssignment(target, index, valueExpr)
-      case _ => throw new UnexpectedTokenException(stream.current, Code.ASSIGNMENT)
+      case _ => throw new UnexpectedTokenException(stream.current, Some(Code.ASSIGNMENT))
     }
   }
 
@@ -179,7 +185,7 @@ class AASTParser(private val stream: TokenStream) {
       val expr = exprParser.parseExpression()
       CodeBlock(List(ExpressionStatement(expr)))
     } else {
-      throw new UnexpectedTokenException(stream.current, Code.IS)
+      throw new UnexpectedTokenException(stream.current, Some(Code.IS))
     }
   }
 
