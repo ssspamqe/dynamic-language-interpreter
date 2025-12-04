@@ -85,7 +85,7 @@ class AASTParser(private val stream: TokenStream) {
     lhs match {
       case Variable(name) => VariableAssignment(name, valueExpr)
       case ArrayAccess(target, index) => ArrayElementAssignment(target, index, valueExpr)
-      case _ => throw new UnexpectedTokenException(stream.current, Code.ASSIGNMENT)
+      case _ => throw new UnexpectedTokenException(stream.current, Some(Code.ASSIGNMENT))
     }
   }
 
@@ -179,7 +179,7 @@ class AASTParser(private val stream: TokenStream) {
       val expr = exprParser.parseExpression()
       CodeBlock(List(ExpressionStatement(expr)))
     } else {
-      throw new UnexpectedTokenException(stream.current, Code.IS)
+      throw new UnexpectedTokenException(stream.current, Some(Code.IS))
     }
   }
 
