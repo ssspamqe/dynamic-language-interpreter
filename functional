@@ -1,0 +1,22 @@
+var filter := func(iterable, clause) is
+    var new := []
+    for i in iterable loop
+        if clause(i) then
+            new := new + [i]
+        end
+    end
+    return new
+end
+
+var map := func(iterable, f) is
+    var new := []
+    for i in iterable loop
+        new := new + [f(i)]
+    end
+    return new
+end
+
+var array := [1, 2, 3, 4, 5, 6, 7, 8]
+
+print filter(array, func(i) => i > 4), "\n"
+print map(array, func(i) => i * 2)

@@ -1,6 +1,7 @@
 package ru.innopolis.interpreter
 
 import org.scalatest.funsuite.AnyFunSuite
+import ru.innopolis.interpreter.exception.UnexpectedEndOfInputException
 import ru.innopolis.interpreter.lexer.{Code, Span, Token}
 import ru.innopolis.interpreter.syntax.analyzer.parser.{ExpressionParser, TokenStream}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
@@ -529,7 +530,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing parenthesis
     )
-    assertThrows[java.lang.IndexOutOfBoundsException] {
+    assertThrows[UnexpectedEndOfInputException] {
       parse(tokens)
     }
   }
@@ -540,7 +541,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing bracket
     )
-    assertThrows[java.lang.IndexOutOfBoundsException] {
+    assertThrows[UnexpectedEndOfInputException] {
       parse(tokens)
     }
   }
@@ -551,7 +552,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing brace
     )
-    assertThrows[java.lang.IndexOutOfBoundsException] {
+    assertThrows[UnexpectedEndOfInputException] {
       parse(tokens)
     }
   }
@@ -563,7 +564,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 1L)
       // Missing closing parenthesis
     )
-    assertThrows[java.lang.IndexOutOfBoundsException] {
+    assertThrows[UnexpectedEndOfInputException] {
       parse(tokens)
     }
   }
@@ -575,7 +576,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.INT_LITERAL, 0L)
       // Missing closing bracket
     )
-    assertThrows[java.lang.IndexOutOfBoundsException] {
+    assertThrows[UnexpectedEndOfInputException] {
       parse(tokens)
     }
   }
@@ -834,7 +835,7 @@ class ExpressionParserTest extends AnyFunSuite {
       token(Code.ROUND_BRACKET_RIGHT)
       // missing => or is ... end
     )
-    assertThrows[java.lang.IndexOutOfBoundsException] {
+    assertThrows[UnexpectedEndOfInputException] {
       parse(tokens)
     }
   }

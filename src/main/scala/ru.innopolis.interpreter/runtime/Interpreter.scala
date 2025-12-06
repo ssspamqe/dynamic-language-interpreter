@@ -1,6 +1,7 @@
 package ru.innopolis.interpreter.runtime
 
 import ru.innopolis.interpreter.lexer.Code
+import ru.innopolis.interpreter.runtime.breaks.{FunctionReturnBreak, LoopExitBreak}
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.literal._
 import ru.innopolis.interpreter.syntax.analyzer.tree.expression.references._
@@ -15,277 +16,281 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
-/**
- * Exception used to exit from a loop
- */
-private class LoopExitException extends Exception
-
-/**
- * Interpreter that executes the AST directly
- */
 class Interpreter {
-  private var environment = new Environment()
-  private var returnValue: Option[Any] = None
-  private var shouldExit: Boolean = false
+  private case object Uninitialized
+
+  private var environment = new Stack()
 
   def interpret(block: CodeBlock): Unit = {
-    environment = new Environment()
-    returnValue = None
-    shouldExit = false
-    executeBlock(block, environment)
+    environment = new Stack()
+    executeBlock(block)
   }
 
-  private def executeBlock(block: CodeBlock, env: Environment): Unit = {
-    val oldEnv = environment
-    environment = env
-    try {
-      for (stmt <- block.statements) {
-        if (shouldExit || returnValue.isDefined) return
-        executeStatement(stmt)
-      }
-    } finally {
-      environment = oldEnv
-    }
+  private def executeBlock(block: CodeBlock): Unit = {
+    block.statements.foreach(executeStatement)
   }
 
-  private def executeStatement(stmt: Statement): Unit = {
-    stmt match {
-      case PrintStatement(expressions) =>
-        val values = expressions.map(evaluateExpression)
-        print(values.mkString(" "))
+  private def executeStatement(stmt: Statement): Unit = stmt match {
+    case PrintStatement(expressions) =>
+      // Для печати используем версию, допускающую Uninitialized,
+      // чтобы переменные без значения выводились как none.
+      val values = expressions.map(e => formatValue(evaluateExpressionAllowUninitialized(e)))
+      print(values.mkString(" "))
 
-      case VariableDeclaration(name, expr) =>
-        val value = evaluateExpression(expr)
+    case VariableDeclaration(declarations) =>
+      declarations.foreach { case (name, exprOpt) =>
+        val value = exprOpt.map(evaluateExpression).getOrElse(Uninitialized)
         environment.defineVariable(name, value)
+      }
 
-      case VariableAssignment(name, expr) =>
-        val value = evaluateExpression(expr)
-        environment.setVariable(name, value)
+    case VariableAssignment(name, expr) =>
+      val value = evaluateExpression(expr)
+      environment.setVariable(name, value)
 
-      case ArrayElementAssignment(target, index, value) =>
-        val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
-        val idx = evaluateExpression(index) match {
-          case l: Long => l.toInt
-          case i: Int => i
-          case _ => throw new RuntimeException("Array index must be an integer")
-        }
-        val valValue = evaluateExpression(value)
-        // Автоматически расширяем массив если нужно
-        if (idx > arr.length) {
-          arr ++= ArrayBuffer.fill(idx - arr.length)(0)
-        }
-        arr(idx - 1) = valValue
+    case ArrayElementAssignment(target, index, value) =>
+      val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
+      val idx = evaluateExpression(index) match {
+        case l: Long => l.toInt
+        case i: Int => i
+        case _ => throw new RuntimeException("Array index must be an integer")
+      }
+      val valValue = evaluateExpression(value)
+      // Автоматически расширяем массив если нужно
+      if (idx > arr.length) {
+        arr ++= ArrayBuffer.fill(idx - arr.length)(0)
+      }
+      arr(idx - 1) = valValue
 
-      case IfStatement(condition, trueBranch, falseBranch) =>
-        val condValue = evaluateExpression(condition) match {
-          case b: Boolean => b
-          case _ => throw new RuntimeException("Condition must be a boolean")
-        }
-        if (condValue) {
-          executeBlock(trueBranch, environment.createChild())
-        } else {
-          falseBranch.foreach(executeBlock(_, environment.createChild()))
-        }
+    case IfStatement(condition, trueBranch, falseBranch) =>
+      val condValue = evaluateExpression(condition) match {
+        case b: Boolean => b
+        case _ => throw new RuntimeException("Condition must be a boolean")
+      }
+      if (condValue) {
+        executeBlock(trueBranch)
+      } else {
+        falseBranch.foreach(executeBlock)
+      }
 
-      case WhileLoop(condition, body) =>
-        breakable {
-          while (true) {
-            if (shouldExit || returnValue.isDefined) break
-            val condValue = evaluateExpression(condition) match {
-              case b: Boolean => b
-              case _ => throw new RuntimeException("While condition must be a boolean")
-            }
-            if (!condValue) break
-            try {
-              executeBlock(body, environment.createChild())
-            } catch {
-              case _: LoopExitException => break
-            }
+    case WhileLoop(condition, body) =>
+      breakable {
+        while (true) {
+          val condValue = evaluateExpression(condition) match {
+            case b: Boolean => b
+            case _ => throw new RuntimeException("While condition must be a boolean")
+          }
+          if (!condValue) break
+          try {
+            executeBlock(body)
+          } catch {
+            case _: LoopExitBreak => break
+            case fr: FunctionReturnBreak => throw fr // пробрасываем return наружу
           }
         }
+      }
 
-      case RangeLoop(ident, from, to, body) =>
-        val fromValue = evaluateExpression(from) match {
-          case l: Long => l
-          case i: Int => i.toLong
-          case _ => throw new RuntimeException("Range loop 'from' must be an integer")
-        }
-        val toValue = evaluateExpression(to) match {
-          case l: Long => l
-          case i: Int => i.toLong
-          case _ => throw new RuntimeException("Range loop 'to' must be an integer")
-        }
-        breakable {
-          for (i <- fromValue to toValue) {
-            if (shouldExit || returnValue.isDefined) break
-            val childEnv = environment.createChild()
-            ident.foreach(name => childEnv.defineVariable(name, i))
-            try {
-              executeBlock(body, childEnv)
-            } catch {
-              case _: LoopExitException => break
-            }
+    case RangeLoop(ident, from, to, body) =>
+      val fromValue = evaluateExpression(from) match {
+        case l: Long => l
+        case i: Int => i.toLong
+        case _ => throw new RuntimeException("Range loop 'from' must be an integer")
+      }
+      val toValue = evaluateExpression(to) match {
+        case l: Long => l
+        case i: Int => i.toLong
+        case _ => throw new RuntimeException("Range loop 'to' must be an integer")
+      }
+      breakable {
+        for (i <- fromValue to toValue) {
+          try {
+            ident.foreach(name => environment.defineVariable(name, i))
+            executeBlock(body)
+          } catch {
+            case _: LoopExitBreak => break
+            case fr: FunctionReturnBreak => throw fr
           }
         }
+      }
 
-      case CollectionLoop(ident, collection, body) =>
-        val coll = evaluateExpression(collection)
-        breakable {
-          coll match {
-            case arr: ArrayBuffer[Any] =>
-              for (elem <- arr) {
-                if (shouldExit || returnValue.isDefined) break
-                val childEnv = environment.createChild()
-                childEnv.defineVariable(ident, elem)
-                try {
-                  executeBlock(body, childEnv)
-                } catch {
-                  case _: LoopExitException => break
-                }
+    case CollectionLoop(ident, collection, body) =>
+      val coll = evaluateExpression(collection)
+      breakable {
+        coll match {
+          case arr: ArrayBuffer[Any] =>
+            for (elem <- arr) {
+              try {
+                environment.defineVariable(ident, elem)
+                executeBlock(body)
+              } catch {
+                case _: LoopExitBreak => break
+                case fr: FunctionReturnBreak => throw fr
               }
-            case list: List[Any] =>
-              for (elem <- list) {
-                if (shouldExit || returnValue.isDefined) break
-                val childEnv = environment.createChild()
-                childEnv.defineVariable(ident, elem)
-                try {
-                  executeBlock(body, childEnv)
-                } catch {
-                  case _: LoopExitException => break
-                }
-              }
-            case _ => throw new RuntimeException("Collection loop requires an array or list")
-          }
-        }
-
-      case loop: Loop =>
-        breakable {
-          while (true) {
-            if (shouldExit || returnValue.isDefined) break
-            try {
-              executeBlock(loop.body, environment.createChild())
-            } catch {
-              case _: LoopExitException => break
             }
+          case list: List[Any] =>
+            for (elem <- list) {
+              try {
+                environment.defineVariable(ident, elem)
+                executeBlock(body)
+              } catch {
+                case _: LoopExitBreak => break
+                case fr: FunctionReturnBreak => throw fr
+              }
+            }
+          case _ => throw new RuntimeException("Collection loop requires an array or list")
+        }
+      }
+
+    case loop: Loop =>
+      breakable {
+        while (true) {
+          try {
+            executeBlock(loop.body)
+          } catch {
+            case _: LoopExitBreak => break
+            case fr: FunctionReturnBreak => throw fr
           }
         }
+      }
 
-      case ReturnStatement(expr) =>
-        returnValue = expr.map(evaluateExpression)
+    case ReturnStatement(expr) =>
+      throw new FunctionReturnBreak(expr.map(evaluateExpression))
 
-      case ExitStatement() =>
-        throw new LoopExitException()
+    case ExitStatement() =>
+      throw new LoopExitBreak()
 
-      case ExpressionStatement(expr) =>
-        evaluateExpression(expr) // Evaluate but don't use result
-    }
+    case ExpressionStatement(expr) =>
+      evaluateExpression(expr)
   }
 
-  private def evaluateExpression(expr: Expression): Any = {
-    expr match {
-      case Literal(value) => value
+  private def evaluateExpression(expr: Expression): Any = expr match {
+    case Literal(value) => value
 
-      case Variable(name) => environment.getVariable(name)
+    case Variable(name) =>
+      val value = environment.getVariable(name)
+      value match {
+        case Uninitialized =>
+          throw new RuntimeException(s"Variable '$name' has no value!")
+        case other => other
+      }
 
-      case Binary(operation, left, right) =>
-        val leftVal = evaluateExpression(left)
-        val rightVal = evaluateExpression(right)
-        evaluateBinary(operation, leftVal, rightVal)
+    case Binary(operation, left, right) =>
+      val leftVal = evaluateExpression(left)
+      val rightVal = evaluateExpression(right)
+      evaluateBinary(operation, leftVal, rightVal)
 
-      case Unary(operation, right) =>
-        val rightVal = evaluateExpression(right)
-        evaluateUnary(operation, rightVal)
+    case Unary(operation, right) =>
+      val rightVal = evaluateExpression(right)
+      evaluateUnary(operation, rightVal)
 
-      case FunctionCall(target, args) =>
-        val func = evaluateExpression(target)
-        val argValues = args.map(evaluateExpression)
-        callFunction(func, argValues)
+    case FunctionCall(target, args) =>
+      // Вызываем функцию: создаём новый фрейм, кладём в него параметры, выполняем тело и затем снимаем фрейм.
+      val func = evaluateExpression(target)
+      val argValues = args.map(evaluateExpression)
+      callFunction(func, argValues)
 
-      case ArrayAccess(target, index) =>
-        val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
-        val idx = evaluateExpression(index) match {
-          case l: Long => l.toInt
-          case i: Int => i
-          case _ => throw new RuntimeException("Array index must be an integer")
+    case ArrayAccess(target, index) =>
+      val arr = evaluateExpression(target).asInstanceOf[ArrayBuffer[Any]]
+      val idx = evaluateExpression(index) match {
+        case l: Long => l.toInt
+        case i: Int => i
+        case _ => throw new RuntimeException("Array index must be an integer")
+      }
+      if (idx > arr.length) {
+        throw new RuntimeException(s"Array index $idx out of bounds for array of length ${arr.length}")
+      }
+      arr(idx - 1)
+
+    case ArrayLiteral(elements) =>
+      ArrayBuffer.from(elements.map(evaluateExpression))
+
+    case TupleLiteral(elements) =>
+      val map = mutable.Map[String, Any]()
+      var index = 1
+      for (entry <- elements) {
+        val value = evaluateExpression(entry.value)
+        entry.key.foreach(key => map(key) = value)
+        map(index.toString) = value
+        index += 1
+      }
+      map.toMap
+
+    case TupleFieldAccess(target, field) =>
+      val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
+      tuple.getOrElse(field, throw new RuntimeException(s"Tuple field '$field' not found"))
+
+    case TupleIndexAccess(target, index) =>
+      val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
+      tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
+
+    case FunctionLiteral(args, body) =>
+      val capturedEnv = environment
+      (argValues: List[Any]) => {
+        if (argValues.length != args.length) {
+          throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
         }
-        if (idx > arr.length) {
-          throw new RuntimeException(s"Array index $idx out of bounds for array of length ${arr.length}")
+        // Новый стек для функции с замыканием на окружающее окружение
+        val funcEnv = new Stack(Some(capturedEnv))
+        val oldEnvRef = environment
+        environment = funcEnv
+        // Новый фрейм для параметров функции
+        environment.pushFrame()
+        for ((arg, value) <- args.zip(argValues)) {
+          environment.defineVariable(arg.value, value)
         }
-        arr(idx - 1)
-
-      case ArrayLiteral(elements) =>
-        ArrayBuffer.from(elements.map(evaluateExpression))
-
-      case TupleLiteral(elements) =>
-        val map = mutable.Map[String, Any]()
-        var index = 1
-        for (entry <- elements) {
-          val value = evaluateExpression(entry.value)
-          entry.key.foreach(key => map(key) = value)
-          map(index.toString) = value
-          index += 1
-        }
-        map.toMap
-
-      case TupleFieldAccess(target, field) =>
-        val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
-        tuple.getOrElse(field, throw new RuntimeException(s"Tuple field '$field' not found"))
-
-      case TupleIndexAccess(target, index) =>
-        val tuple = evaluateExpression(target).asInstanceOf[Map[String, Any]]
-        tuple.getOrElse(index.toString, throw new RuntimeException(s"Tuple index $index not found"))
-
-      case FunctionLiteral(args, body) =>
-        val capturedEnv = environment // Захватываем контекст
-        (argValues: List[Any]) => {
-          if (argValues.length != args.length) {
-            throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
-          }
-          val funcEnv = capturedEnv.createChild()
-          for ((arg, value) <- args.zip(argValues)) {
-            funcEnv.defineVariable(arg.value, value)
-          }
-          val oldReturn = returnValue
-          val oldExit = shouldExit
-          val oldEnv = environment
-          returnValue = None
-          shouldExit = false
-          environment = funcEnv
+        try {
           try {
-            executeBlock(body, funcEnv)
-            returnValue.getOrElse(None)
-          } finally {
-            returnValue = oldReturn
-            shouldExit = oldExit
-            environment = oldEnv
+            executeBlock(body)
+            None
+          } catch {
+            case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
+        } finally {
+          // Снимаем фрейм функции и возвращаемся к старому окружению
+          environment.popFrame()
+          environment = oldEnvRef
         }
+      }
 
-      case LambdaLiteral(args, body) =>
-        val capturedEnv = environment // Захватываем контекст
-        (argValues: List[Any]) => {
-          if (argValues.length != args.length) {
-            throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
-          }
-          val funcEnv = capturedEnv.createChild()
-          for ((arg, value) <- args.zip(argValues)) {
-            funcEnv.defineVariable(arg.value, value)
-          }
-          val oldEnv = environment
-          environment = funcEnv
+    case LambdaLiteral(args, body) =>
+      val capturedEnv = environment
+      (argValues: List[Any]) => {
+        if (argValues.length != args.length) {
+          throw new RuntimeException(s"Expected ${args.length} arguments, got ${argValues.length}")
+        }
+        val funcEnv = new Stack(Some(capturedEnv))
+        val oldEnvRef = environment
+        environment = funcEnv
+        environment.pushFrame()
+        for ((arg, value) <- args.zip(argValues)) {
+          environment.defineVariable(arg.value, value)
+        }
+        try {
           try {
             evaluateExpression(body)
-          } finally {
-            environment = oldEnv
+          } catch {
+            case fr: FunctionReturnBreak => fr.value.getOrElse(None)
           }
+        } finally {
+          environment.popFrame()
+          environment = oldEnvRef
         }
+      }
 
-      case TypeCheck(expression, typeIndicator) =>
-        val value = evaluateExpression(expression)
-        checkType(value, typeIndicator)
+    case TypeCheck(expression, typeIndicator) =>
+      val value = evaluateExpressionAllowUninitialized(expression)
+      checkType(value, typeIndicator)
 
-      case _ => throw new RuntimeException(s"Unsupported expression: $expr")
-    }
+    case _ => throw new RuntimeException(s"Unsupported expression: $expr")
+  }
+
+  // Вспомогательная версия evaluateExpression, которая не бросает ошибку
+  // для Uninitialized, чтобы позволить type check `a is none`.
+  private def evaluateExpressionAllowUninitialized(expr: Expression): Any = expr match {
+    case Variable(name) =>
+      // если переменная не определена вообще, оставляем то же поведение (ошибка "not defined")
+      environment.getVariable(name)
+    case other =>
+      evaluateExpression(other)
   }
 
   private def evaluateBinary(operation: Code, left: Any, right: Any): Any = {
@@ -418,10 +423,49 @@ class Interpreter {
       case TypeIndicator.RealType => value.isInstanceOf[Double] || value.isInstanceOf[Float]
       case TypeIndicator.BoolType => value.isInstanceOf[Boolean]
       case TypeIndicator.StringType => value.isInstanceOf[String]
-      case TypeIndicator.NoneType => value == None
+      case TypeIndicator.NoneType => value == Uninitialized
       case TypeIndicator.ArrayType => value.isInstanceOf[ArrayBuffer[Any]] || value.isInstanceOf[List[Any]]
       case TypeIndicator.TupleType => value.isInstanceOf[Map[_, _]]
       case TypeIndicator.FuncType => value.isInstanceOf[List[Any] => Any]
     }
   }
+
+  private def formatValue(value: Any, quotes: Boolean = false): String = value match {
+
+    // string
+    case s: String if quotes =>
+      "\"" + s + "\""
+    case s: String if !quotes =>
+      s
+
+    // integer / real / boolean
+    case n: Number => n.toString
+    case b: Boolean => b.toString
+
+    // array
+    case arr: ArrayBuffer[Any] =>
+      "[" + arr.map(formatValue(_, true)).mkString(", ") + "]"
+
+    // tuple (Map[String, Any])
+    case map: Map[_, _] =>
+      // сортируем по ключам: сначала имена, потом числовые индексы
+      val (named, indexed) = map.toList.partition(_._1.asInstanceOf[String].forall(!_.isDigit))
+
+      val namedSorted = named.asInstanceOf[List[(String, Any)]].sortBy(_._1)
+      val indexedSorted = indexed.asInstanceOf[List[(String, Any)]].sortBy(_._1.toInt)
+
+      val parts =
+        (namedSorted ++ indexedSorted).map { case (k, v) => s"$k:=${formatValue(v, true)}" }
+
+      "{" + parts.mkString(", ") + "}"
+
+    // function (print as <function>)
+    case f: (List[Any] => Any) =>
+      "<function>"
+
+    // anything else
+    case other =>
+      other.toString
+  }
+
 }

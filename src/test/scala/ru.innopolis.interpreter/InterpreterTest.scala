@@ -1,9 +1,12 @@
 package ru.innopolis.interpreter
 
 import org.scalatest.funsuite.AnyFunSuite
+import org.scalatest.matchers.should.Matchers.{a, convertToAnyShouldWrapper}
 import ru.innopolis.interpreter.analyzer.semantic.optimization.Optimizer
+import ru.innopolis.interpreter.exception.SemanticCheckException
 import ru.innopolis.interpreter.runtime.Interpreter
 import ru.innopolis.interpreter.syntax.analyzer.parser.{AASTParser, TokenStream}
+import ru.innopolis.interpreter.syntax.analyzer.semantic.SemanticCheckAnalyzer
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 
@@ -16,13 +19,15 @@ class InterpreterTest extends AnyFunSuite {
     val stream = new TokenStream(tokens)
     val parser = new AASTParser(stream)
     val ast = parser.parse()
-//    val optimizedAst = Optimizer.optimize(ast)
+    val checker = new SemanticCheckAnalyzer()
+    checker.analyze(ast)
+    val optimizedAst = Optimizer.optimize(ast)
 
     val out = new ByteArrayOutputStream()
 
     Console.withOut(out) {
       val interpreter = new Interpreter()
-      interpreter.interpret(ast)
+      interpreter.interpret(optimizedAst)
     }
 
     out.toString("UTF-8")
@@ -224,8 +229,10 @@ class InterpreterTest extends AnyFunSuite {
 
   test("interpret variable scope") {
     val code = "var x := 10\nif true then\n    var x := 20\n    print x\nend\nprint x"
-    val output = interpretCode(code)
-    assert(output == "2010")
+
+    val exception = intercept[SemanticCheckException](interpretCode(code))
+
+    exception shouldBe a[SemanticCheckException]
   }
 
   test("interpret infinite loop with exit") {
@@ -433,6 +440,52 @@ class InterpreterTest extends AnyFunSuite {
         |""".stripMargin
     val output = interpretCode(code)
     assert(output == "001")
+  }
+
+  test("func use another func") {
+    val code =
+      """var f1 := func(x) => 2*x
+        |var f2 := func(x) => f1(x*3)
+        |f2(1)
+        """.stripMargin
+    val output = interpretCode(code)
+    assert(output == "")
+  }
+
+  test("print array") {
+    val code =
+      """var a := ["a", "b", 1, 2]
+        |var t := {a:=1, b:=2, 1+10};
+        |print a
+        """.stripMargin
+    val output = interpretCode(code)
+    assert(output == "[\"a\", \"b\", 1, 2]")
+  }
+
+  test("print tuple") {
+    val code =
+      """var t := {a:=1, b:=2, c := {g := 2, "h"}};
+        |print t
+        """.stripMargin
+    val output = interpretCode(code)
+    assert(output == "{a:=1, b:=2, c:={g:=2, 1:=2, 2:=\"h\"}, 1:=1, 2:=2, 3:={g:=2, 1:=2, 2:=\"h\"}}")
+  }
+
+  test("handle function recursion") {
+    val code=
+      """var f := func(a) is
+        |    print a
+        |    if a = 3  then
+        |        return
+        |    end
+        |    f(a+1)
+        |end
+        |f(1)
+        |""".stripMargin
+
+    val output = interpretCode(code)
+
+    assert(output == "123")
   }
 }
 
